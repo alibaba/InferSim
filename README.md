@@ -18,9 +18,9 @@ For more details, please check [InferSim Technical Report](https://github.com/us
 
 ## Supported Features
 
-- **Attention**: MHA/GQA, MLA. MFU benchmarks from FlashInfer, FlashAttention-3, FlashMLA.
-- **MoE**: GroupedGEMM. MFU benchmarks from DeepGEMM.
-- **Linear**: GEMM. MFU benchmarks from DeepGEMM.
+- **Attention**: MHA/GQA, MLA. Benchmarked on FlashInfer, FlashAttention-3, FlashMLA.
+- **MoE**: GroupedGEMM. Benchmarked on DeepGEMM.
+- **Linear**: GEMM. Benchmarked on DeepGEMM.
 - **Parallelization**: DP Attn, EP MoE.
 - **Large EP**: DeepEP dispatch and combine, with normal and low_latency mode.
 
