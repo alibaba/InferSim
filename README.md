@@ -6,7 +6,7 @@ The main use cases of InferSim include:
 - **Model-Sys co-design**: predicting inference performance given the hyperparameters of a model.
 - **Inference performance analysis**: quantifying performance bottlenecks, such as compute-bound or IO-bound, and supporting optimization efforts.
 
-For more details, please check [InferSim Technical Report](https://github.com/user-attachments/files/22580184/infersim_tech_report.pdf).
+For more details, please check [InferSim Technical Report](https://github.com/user-attachments/files/23016438/infersim_tech_report.pdf).
 
 ## Simulation Result
 
