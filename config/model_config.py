@@ -9,12 +9,23 @@ class ModelConfig:
         d = dict()
         with open(config_path, "r") as f:
             d = json.load(f)
-        self.attn_type = "MHA/GQA"
-        if "kv_lora_rank" in d:
-            self.attn_type = "MLA"
 
         self.hidden_size = d["hidden_size"]
         self.num_hidden_layers = d["num_hidden_layers"]
+
+        self.is_hybrid_linear = d.get("full_attention_interval") is not None
+        if self.is_hybrid_linear:
+            self.num_full_attn_layers = self.num_hidden_layers // d["full_attention_interval"]
+            self.num_linear_attn_layers = self.num_hidden_layers - self.num_full_attn_layers
+            self.linear_conv_kernel_dim = d["linear_conv_kernel_dim"]
+            self.linear_key_head_dim = d["linear_key_head_dim"]
+            self.linear_num_key_heads = d["linear_num_key_heads"]
+            self.linear_value_head_dim = d["linear_value_head_dim"]
+            self.linear_num_value_heads = d["linear_num_value_heads"]
+
+        self.attn_type = "MHA/GQA"
+        if "kv_lora_rank" in d:
+            self.attn_type = "MLA"
 
         # attn
         if self.attn_type == "MHA/GQA":

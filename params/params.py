@@ -27,11 +27,31 @@ def get_mla_params_size(config: ModelConfig, use_fp8: bool):
     return 2 * (wq_down + wq_up + wkv_down + wkv_up + wo)
 
 
+def get_gdn_params_size(config: ModelConfig, use_fp8: bool):
+    wq = config.hidden_size * config.linear_num_key_heads * config.linear_key_head_dim
+    wk = wq
+    wv = config.hidden_size * config.linear_num_value_heads * config.linear_value_head_dim
+    wz = wv
+    wa = config.hidden_size * config.linear_num_value_heads
+    wb = wa
+    s = wq + wk + wv + wz + wa + wb
+    wconv = config.linear_num_key_heads * config.linear_key_head_dim * config.linear_conv_kernel_dim
+    wconv += config.linear_num_key_heads * config.linear_key_head_dim * config.linear_conv_kernel_dim
+    wconv += config.linear_num_value_heads * config.linear_value_head_dim * config.linear_conv_kernel_dim
+    if use_fp8:
+        return s + wconv
+    return 2 * s + wconv
+
+
 def get_attn_params_size(config: ModelConfig, use_fp8: bool):
     if config.attn_type == "MHA/GQA":
         return get_mha_params_size(config, use_fp8)
     elif config.attn_type == "MLA":
         return get_mla_params_size(config, use_fp8)
+
+
+def get_linear_attn_params_size(config: ModelConfig, use_fp8: bool):
+    return get_gdn_params_size(config, use_fp8)
 
 
 def get_expert_params_size(config: ModelConfig, use_fp8: bool):

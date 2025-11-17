@@ -1,6 +1,7 @@
 import argparse
 
 from config.model_config import ModelConfig
+from models.hybrid_model import HybridModel
 from models.model import Model
 
 
@@ -14,7 +15,10 @@ def main(args):
     print("{:<40} {:<10}".format("Use FP8 GEMM:", args.use_fp8_gemm))
     print("{:<40} {:<10}".format("Use FP8 KV:", args.use_fp8_kv))
 
-    model = Model(args, config)
+    if config.is_hybrid_linear:
+        model = HybridModel(args, config)
+    else:
+        model = Model(args, config)
     model.print_weights_info()
     model.print_kvcache_info()
     model.print_flops_info()
