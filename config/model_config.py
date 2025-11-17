@@ -15,8 +15,12 @@ class ModelConfig:
 
         self.is_hybrid_linear = d.get("full_attention_interval") is not None
         if self.is_hybrid_linear:
-            self.num_full_attn_layers = self.num_hidden_layers // d["full_attention_interval"]
-            self.num_linear_attn_layers = self.num_hidden_layers - self.num_full_attn_layers
+            self.num_full_attn_layers = (
+                self.num_hidden_layers // d["full_attention_interval"]
+            )
+            self.num_linear_attn_layers = (
+                self.num_hidden_layers - self.num_full_attn_layers
+            )
             self.linear_conv_kernel_dim = d["linear_conv_kernel_dim"]
             self.linear_key_head_dim = d["linear_key_head_dim"]
             self.linear_num_key_heads = d["linear_num_key_heads"]
