@@ -197,3 +197,29 @@ def get_gemm_mfu(device_type, m, k, n):
             mfu = float(row[4])
 
     return round(mfu, 3)
+
+
+def get_linear_attn_prefill_latency(config, seq_len, device_type):
+    file_name = f"bench_data/gdn/prefill/{device_type.lower()}/{config.linear_conv_kernel_dim}-{config.linear_num_key_heads}-{config.linear_key_head_dim}-{config.linear_num_value_heads}-{config.linear_value_head_dim}.csv"
+    if not os.path.exists(file_name):
+        assert False, f"Error: {file_name} not exist."
+
+    # seq_len,conv,kkt,tril,wu,chunk_gdn,chunk_o
+    rows = list()
+    with open(file_name, "r") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            rows.append(row)
+    idx = 0
+    diff = 1e9
+    for i in range(len(rows)):
+        sq = int(rows[i][0])
+        if abs(sq - seq_len) < diff:
+            diff = abs(sq - seq_len)
+            idx = i
+    ratio = int(rows[idx][0]) / seq_len
+    t = 0
+    for i in range(1, len(rows[idx])):
+        t += float(rows[idx][i]) * ratio
+    return t  # latency in us

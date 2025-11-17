@@ -5,6 +5,7 @@ from flops.flops import get_attn_gflops, get_moe_gflops
 from hardware.gpu import gpu_map
 from kvcache.kvcache import get_kvcache_size, get_states_size
 from layers.attn import create_attention
+from layers.linear_attn import create_linear_attn
 from layers.moe import MoE
 from params.params import (get_attn_params_size, get_expert_params_size,
                            get_linear_attn_params_size)
@@ -100,7 +101,7 @@ class HybridModel:
         )
         if kvcache_bytes + states_bytes > target_kvcache_bytes:
             print("!Error: need smaller kvcache")
-        self.kvcache_bytes = kvcache_bytes
+        self.kvcache_bytes = kvcache_bytes / context_len
         self.states_bytes = states_bytes
         self.target_bs = target_bs
 
@@ -160,19 +161,31 @@ class HybridModel:
         print(
             "{:<40} {:<10}".format("Max prefill tokens:", self.args.max_prefill_tokens)
         )
-        attn = create_attention(
+        # full attn
+        full_attn = create_attention(
             self.config, self.args.use_fp8_gemm, self.args.use_fp8_kv
         )
-        attn_core_time = attn.prefill_attn_core(
+        t_full_attn_core = full_attn.prefill_attn_core(
             self.args.target_isl, self.kvcache_bytes, self.args.device_type
         )
-        attn_other_time = attn.prefill_attn_others(
+        t_full_attn_others = full_attn.prefill_attn_others(
             self.args.max_prefill_tokens, self.args.device_type
         )
-        attn_core_time *= math.ceil(self.args.max_prefill_tokens / self.args.target_isl)
+        t_full_attn_core *= self.args.max_prefill_tokens / self.args.target_isl
 
+        # linear attn
+        linear_attn = create_linear_attn(self.config, self.args.use_fp8_gemm)
+        t_linear_attn_core = linear_attn.prefill_attn_core(
+            self.args.target_isl, self.states_bytes, self.args.device_type
+        )
+        t_linear_attn_core *= self.args.max_prefill_tokens / self.args.target_isl
+        t_linear_attn_others = linear_attn.prefill_attn_others(
+            self.args.max_prefill_tokens, self.args.device_type
+        )
+
+        # moe
         moe = MoE(self.config, self.args.use_fp8_gemm)
-        moe_time = moe.prefill_moe(
+        t_moe = moe.prefill_moe(
             self.args.max_prefill_tokens, self.args.device_type, self.args.world_size
         )
 
@@ -183,27 +196,18 @@ class HybridModel:
             self.args.num_nodes,
             self.args.enable_deepep,
         )
-        comm_time1, comm_time2 = comm.prefill_comm(self.args.max_prefill_tokens)
-        print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_time1 * 1e6))
-        print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_time2 * 1e6))
+        comm_t1, comm_t2 = comm.prefill_comm(self.args.max_prefill_tokens)
+        print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_t1 * 1e6))
+        print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_t2 * 1e6))
 
         num_tokens = self.args.max_prefill_tokens
-        if self.args.enable_tbo:
-            num_tokens *= 2
-            ttft = max(
-                (attn_core_time + attn_other_time) / self.args.sm_ratio, comm_time1
-            )
-            ttft += max(
-                (attn_core_time + attn_other_time) / self.args.sm_ratio, comm_time2
-            )
-            ttft += max(moe_time / self.args.sm_ratio, comm_time1)
-            ttft += max(moe_time / self.args.sm_ratio, comm_time2)
-        else:
-            ttft = attn_core_time
-            ttft += moe_time
-            ttft += attn_other_time
-            ttft += comm_time1 + comm_time2
-        ttft *= self.config.num_hidden_layers
+        ttft = (
+            t_full_attn_core + t_full_attn_others
+        ) * self.config.num_full_attn_layers
+        ttft += (
+            t_linear_attn_core + t_linear_attn_others
+        ) * self.config.num_linear_attn_layers
+        ttft += (t_moe + comm_t1 + comm_t2) * self.config.num_hidden_layers
         ttft *= 1000  # convert to ms
         ttft += 30  # for scheduler
 
