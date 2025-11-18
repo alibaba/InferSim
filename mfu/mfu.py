@@ -223,3 +223,29 @@ def get_linear_attn_prefill_latency(config, seq_len, device_type):
     for i in range(1, len(rows[idx])):
         t += float(rows[idx][i]) * ratio
     return t  # latency in us
+
+
+def get_linear_attn_decode_latency(config, batchsize, device_type):
+    file_name = f"bench_data/gdn/decode/{device_type.lower()}/{config.linear_conv_kernel_dim}-{config.linear_num_key_heads}-{config.linear_key_head_dim}-{config.linear_num_value_heads}-{config.linear_value_head_dim}.csv"
+    if not os.path.exists(file_name):
+        assert False, f"Error: {file_name} not exist."
+
+    # batchsize,conv,gdn_update
+    rows = list()
+    with open(file_name, "r") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            rows.append(row)
+    idx = 0
+    diff = 1e9
+    for i in range(len(rows)):
+        bs = int(rows[i][0])
+        if abs(bs - batchsize) < diff:
+            diff = abs(bs - batchsize)
+            idx = i
+    ratio = int(rows[idx][0]) / batchsize
+    t = 0
+    for i in range(1, len(rows[idx])):
+        t += float(rows[idx][i]) * ratio
+    return t  # latency in us

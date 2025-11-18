@@ -220,19 +220,31 @@ class HybridModel:
 
     def decoding(self):
         print("{s:{c}^{n}}".format(s="Decoding", n=50, c="-"))
-        attn = create_attention(
+        # full attn
+        full_attn = create_attention(
             self.config, self.args.use_fp8_gemm, self.args.use_fp8_kv
         )
-        attn_core_time = attn.decode_attn_core(
+        t_full_attn_core = full_attn.decode_attn_core(
             self.target_bs,
             self.avg_context_len,
             self.kvcache_bytes,
             self.args.device_type,
         )
-        attn_other_time = attn.decode_attn_others(self.target_bs, self.args.device_type)
+        t_full_attn_others = full_attn.decode_attn_others(
+            self.target_bs, self.args.device_type
+        )
+
+        # linear attn
+        linear_attn = create_linear_attn(self.config, self.args.use_fp8_gemm)
+        t_linear_attn_core = linear_attn.decode_attn_core(
+            self.target_bs, self.states_bytes, self.args.device_type
+        )
+        t_linear_attn_others = linear_attn.decode_attn_others(
+            self.target_bs, self.args.device_type
+        )
 
         moe = MoE(self.config, self.args.use_fp8_gemm)
-        moe_time = moe.decode_moe(
+        t_moe = moe.decode_moe(
             self.target_bs, self.args.device_type, self.args.world_size
         )
 
@@ -243,23 +255,18 @@ class HybridModel:
             self.args.num_nodes,
             self.args.enable_deepep,
         )
-        comm_time1, comm_time2 = comm.decode_comm(self.target_bs)
-        print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_time1 * 1e6))
-        print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_time2 * 1e6))
+        comm_t1, comm_t2 = comm.decode_comm(self.target_bs)
+        print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_t1 * 1e6))
+        print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_t2 * 1e6))
 
         num_tokens = self.target_bs
-        if self.args.enable_tbo:
-            num_tokens *= 2
-            tpot = max(
-                attn_core_time + attn_other_time, moe_time + comm_time1 + comm_time2
-            )
-            tpot *= 2
-        else:
-            tpot = attn_core_time
-            tpot += attn_other_time
-            tpot += moe_time
-            tpot += comm_time1 + comm_time2
-        tpot *= self.config.num_hidden_layers
+        tpot = (
+            t_full_attn_core + t_full_attn_others
+        ) * self.config.num_full_attn_layers
+        tpot += (
+            t_linear_attn_core + t_linear_attn_others
+        ) * self.config.num_linear_attn_layers
+        tpot += (t_moe + comm_t1 + comm_t2) * self.config.num_hidden_layers
         tpot *= 1000  # convert to ms
         tpot += 5  # for scheduler
 
