@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class GPU:
     fp16_tflops: float
     fp8_tflops: float
-    mfu: float
+    mfu: float  # default mfu
     mem: float
     mem_bw: float  # GB/s
     nvlink_bw: float  # unidirectional GB/s
@@ -19,8 +19,8 @@ h20 = GPU(
     mem=96,
     mem_bw=4096 * 0.8,
     nvlink_bw=900 * 0.8 / 2,
-    rdma_bw=40,
-)  # 20GB/s for 4 ibv devices, 40GB/s for 8 ibv devices
+    rdma_bw=50 * 0.8,
+)  # 25GB/s for 4 ibv devices, 50GB/s for 8 ibv devices
 
 h800 = GPU(
     fp16_tflops=989,
@@ -29,7 +29,17 @@ h800 = GPU(
     mem=80,
     mem_bw=3430 * 0.8,
     nvlink_bw=400 * 0.8 / 2,
-    rdma_bw=40,
+    rdma_bw=50 * 0.8,
 )
 
-gpu_map = {"H20": h20, "H800": h800}
+gb200 = GPU(
+    fp16_tflops=2500,
+    fp8_tflops=5000,
+    mfu=0.5,
+    mem=192,
+    mem_bw=13400 * 0.8,
+    nvlink_bw=1800 * 0.8 / 2,  # 1800GB/s, bi-directional
+    rdma_bw=50 * 0.8,
+)  # GB200 NVL72
+
+gpu_map = {"H20": h20, "H800": h800, "GB200": gb200}
