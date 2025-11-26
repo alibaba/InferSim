@@ -42,7 +42,7 @@ if __name__ == "__main__":
         "--device-type",
         type=str,
         default="H20",
-        choices=["H20", "H800", "GB200"],
+        choices=["H20", "H800", "H200", "GB200"],
         help="Device type",
     )
     parser.add_argument("--world-size", type=int, default=1, help="Num of GPUs")
