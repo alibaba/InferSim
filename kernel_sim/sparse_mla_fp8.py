@@ -27,7 +27,7 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
         2 * topk * dim_nope
     ])
     
-    num_heads_per_block = block_M % num_heads
+    num_heads_per_block = block_M if block_M < num_heads else num_heads
     
     t_MMA_per_token = num_heads_per_block * (dim_nope + dim_nope + dim_rope) * 2 / gpu.fp16_tflops / 1e12 * gpu.num_sm
     
