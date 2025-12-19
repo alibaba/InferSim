@@ -14,6 +14,7 @@ class GPU:
     num_sm: int = None
     compute_capability: float = None
 
+
 h20 = GPU(
     fp16_tflops=148,
     fp8_tflops=296,
