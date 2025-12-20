@@ -79,7 +79,7 @@ if __name__ == "__main__":
         batch_size=128,
         num_heads=128,
         s_q=2,
-        topk=2048,
+        topk=32*1024,
         dim=512,
         gpu_type="H800"
     )
