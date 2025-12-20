@@ -23,7 +23,7 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
     dim_nope = dim
     
     compute_volume_flop = batch_size * num_heads * s_q * sum([
-        2 * dim_nope + dim_rope * topk,
+        2 * (dim_nope + dim_rope) * topk,
         2 * topk * dim_nope
     ])
     
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         batch_size=128,
         num_heads=128,
         s_q=2,
-        topk=32*1024,
+        topk=2048,
         dim=512,
         gpu_type="H800"
     )
