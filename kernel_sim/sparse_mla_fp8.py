@@ -63,7 +63,7 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
     
     num_SM_parts = gpu.num_sm // 2
     sum_block = topk / block_M * batch_size
-    num_block_per_SM_parts = sum_block // num_SM_parts // 2
+    num_block_per_SM_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
     
     time = num_block_per_SM_parts * t_per_block * 2
     
