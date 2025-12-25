@@ -25,7 +25,7 @@ h20 = GPU(
     rdma_bw=50 * 0.8,
     frequency=1980 * 0.9,
     num_sm=78,
-    compute_capability=90,
+    sm_version=90,
 )  # 25GB/s for 4 ibv devices, 50GB/s for 8 ibv devices
 
 h800 = GPU(
@@ -38,7 +38,7 @@ h800 = GPU(
     rdma_bw=50 * 0.8,
     frequency=1980 * 0.9,
     num_sm=132,
-    compute_capability=90,
+    sm_version=90,
 )
 
 h200 = GPU(

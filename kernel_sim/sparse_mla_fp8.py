@@ -16,17 +16,11 @@ DEQUANT_CYCLES = {
     }
 }
 
-config_path = os.path.join(
-    os.path.dirname(__file__), "..", "hf_configs", "deepseek_v3.2_config.json"
-)
-config = ModelConfig(config_path)
 
-
-def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
+def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
     gpu = gpu_map[gpu_type]
 
     block_M = 64
-    dim_rope = config.qk_rope_head_dim
     dim_nope = dim
 
     compute_volume_flop = (
@@ -74,14 +68,14 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
 
     t_load_KV_per_token = t_load_scales + t_load_nope + t_load_rope
 
-    t_LKAD_per_token = t_load_KV_per_token + t_dequant_per_token
+    t_load_and_dequant_per_token = t_load_KV_per_token + t_dequant_per_token
 
     t_MMA_per_block = block_M * t_MMA_per_token
-    t_LKAD_per_block = (block_M // 2) * t_LKAD_per_token
+    t_load_and_dequant_per_block = (block_M // 2) * t_load_and_dequant_per_token
 
     t_per_block = (
-        s_q * t_LKAD_per_block
-        if t_LKAD_per_block > t_MMA_per_block
+        s_q * t_load_and_dequant_per_block
+        if t_load_and_dequant_per_block > t_MMA_per_block
         else s_q * t_MMA_per_block
     )
 
@@ -105,12 +99,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--gpu_type", type=str, required=True, help="GPU type (e.g., H800, H20)"
     )
+    config_path = os.path.join(
+        os.path.dirname(__file__), "..", "hf_configs", "deepseek_v3.2_config.json"
+    )
+    config = ModelConfig(config_path)
 
     args = parser.parse_args()
 
     dim = config.kv_lora_rank
     num_heads = config.num_attention_heads
     topk = config.index_topk
+    dim_rope = config.qk_rope_head_dim
     batch_size = 128
 
     time_ms, tflops = sparse_mla_fp8(
@@ -120,6 +119,7 @@ if __name__ == "__main__":
         topk=topk,
         dim=dim,
         gpu_type=args.gpu_type,
+        dim_rope=dim_rope,
     )
     print(f"Time: {time_ms:.6f} ms")
     print(f"TFLOPS: {tflops:.6f}")
