@@ -1,14 +1,14 @@
 import argparse
-import json
 import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+from config.model_config import ModelConfig
 from hardware.gpu import gpu_map
 
 DEQUANT_CYCLES = {
-    9.0: {
+    90: {
         "fp8_to_half": 1 / 64,
         "half_to_fp32": 1 / 64,
         "fp32_to_bf16": 1 / 16,
@@ -16,12 +16,17 @@ DEQUANT_CYCLES = {
     }
 }
 
+config_path = os.path.join(
+    os.path.dirname(__file__), "..", "hf_configs", "deepseek_v3.2_config.json"
+)
+config = ModelConfig(config_path)
+
 
 def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
     gpu = gpu_map[gpu_type]
 
     block_M = 64
-    dim_rope = 64
+    dim_rope = config.qk_rope_head_dim
     dim_nope = dim
 
     compute_volume_flop = (
@@ -96,30 +101,23 @@ if __name__ == "__main__":
     parser.add_argument(
         "--s_q", type=int, required=True, help="Sequence length for query"
     )
-    parser.add_argument("--topk", type=int, required=True, help="Top-k value")
+    # parser.add_argument("--topk", type=int, required=True, help="Top-k value")
     parser.add_argument(
         "--gpu_type", type=str, required=True, help="GPU type (e.g., H800, H20)"
     )
 
     args = parser.parse_args()
 
-    # Load config file
-    config_path = os.path.join(
-        os.path.dirname(__file__), "..", "hf_configs", "deepseek_v3_config.json"
-    )
-    with open(config_path, "r") as f:
-        config = json.load(f)
-
-    # Get dim from kv_lora_rank and headq from num_attention_heads
-    dim = config["kv_lora_rank"]
-    headq = config["num_attention_heads"]
+    dim = config.kv_lora_rank
+    num_heads = config.num_attention_heads
+    topk = config.index_topk
     batch_size = 128
 
     time_ms, tflops = sparse_mla_fp8(
         batch_size=batch_size,
-        num_heads=headq,
+        num_heads=num_heads,
         s_q=args.s_q,
-        topk=args.topk,
+        topk=topk,
         dim=dim,
         gpu_type=args.gpu_type,
     )
