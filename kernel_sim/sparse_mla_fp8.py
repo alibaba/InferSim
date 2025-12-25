@@ -78,7 +78,9 @@ def sparse_mla_fp8(
 
     time_mma_per_block = BLOCK_M * time_mma_per_token
     time_load_and_dequant_per_block = BLOCK_M // 2 * time_load_and_dequant_per_token
-
+    print(
+        f"time_load_and_dequant_per_block: {time_load_and_dequant_per_block:.3f}, time_mma_per_block: {time_mma_per_block:.3f}"
+    )
     time_per_block = max(
         seq_len * time_load_and_dequant_per_block, seq_len * time_mma_per_block
     )
@@ -125,5 +127,5 @@ if __name__ == "__main__":
         gpu_type=args.gpu_type,
         dim_rope=config.qk_rope_head_dim,
     )
-    print(f"Time: {time_ms:.6f} ms")
-    print(f"TFLOPS: {theoretical_max_tflops:.6f}")
+    print(f"Time: {time_ms:.3f} ms")
+    print(f"TFLOPS: {theoretical_max_tflops:.3f}")
