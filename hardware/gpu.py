@@ -12,7 +12,7 @@ class GPU:
     rdma_bw: float  # unidirectional GB/s
     frequency: float = None  # MHz
     num_sm: int = None
-    compute_capability: int = None
+    sm_version: int = None
 
 
 h20 = GPU(
