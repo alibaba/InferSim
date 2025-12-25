@@ -70,7 +70,7 @@ def sparse_mla_fp8(
 
     time_load_scales = dim_nope / QUANT_TILE_SIZE * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
     time_load_nope = dim_nope * SIZEOF_FP8 / gpu.mem_bw / 1e9 * gpu.num_sm
-    time_load_rope = SIZEOF_BF16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
+    time_load_rope = dim_rope * SIZEOF_BF16 / gpu.mem_bw / 1e9 * gpu.num_sm
 
     time_load_kv_per_token = time_load_scales + time_load_nope + time_load_rope
 
