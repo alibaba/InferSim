@@ -84,9 +84,10 @@ def sparse_mla_fp8(
     )
 
     sum_block = topk // BLOCK_M * batch_size
-    num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
+    sm_parts = gpu.num_sm // 2
+    num_block_per_sm_parts = (sum_block + sm_parts - 1) // sm_parts
 
-    time = num_block_per_sm_parts * time_per_block * 2  # 2-stage pipeline
+    time = num_block_per_sm_parts * time_per_block
 
     time_ms = time * 1000
     theoretical_max_tflops = compute_volume_flop / time / 1e12
