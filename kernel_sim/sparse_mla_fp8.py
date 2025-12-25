@@ -50,7 +50,8 @@ def sparse_mla_fp8(
     )
 
     cycle_time = 1 / gpu.frequency / 1e6
-
+    if gpu.sm_version not in DEQUANT_CYCLES:
+        raise ValueError(f"Unsupported SM version: {gpu.sm_version}")
     cycles = DEQUANT_CYCLES[gpu.sm_version]
     fp8_to_half_cycles = cycles["fp8_to_half"]
     half_to_fp32_cycles = cycles["half_to_fp32"]
@@ -79,14 +80,14 @@ def sparse_mla_fp8(
     time_load_and_dequant_per_token = time_load_kv_per_token + time_dequant_per_token
 
     time_mma_per_block = BLOCK_M * time_mma_per_token
-    time_load_and_dequant_per_block = (BLOCK_M // 2) * time_load_and_dequant_per_token
+    time_load_and_dequant_per_block = (BLOCK_M / 2) * time_load_and_dequant_per_token
 
     time_per_block = max(
         seq_len * time_load_and_dequant_per_block, seq_len * time_mma_per_block
     )
 
     sum_block = topk / BLOCK_M * batch_size
-    num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
+    num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) / gpu.num_sm
 
     time = num_block_per_sm_parts * time_per_block * 2
 
