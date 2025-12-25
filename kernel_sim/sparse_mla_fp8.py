@@ -79,7 +79,7 @@ def sparse_mla_fp8(
     time_mma_per_block = BLOCK_M * time_mma_per_token
     time_load_and_dequant_per_block = BLOCK_M // 2 * time_load_and_dequant_per_token
     print(
-        f"time_load_and_dequant_per_block: {time_load_and_dequant_per_block:.3f}, time_mma_per_block: {time_mma_per_block:.3f}"
+        f"time_load_and_dequant_per_block: {time_load_and_dequant_per_block * 1e6:.3f}us, time_mma_per_block: {time_mma_per_block * 1e6:.3f}us"
     )
     time_per_block = max(
         seq_len * time_load_and_dequant_per_block, seq_len * time_mma_per_block
