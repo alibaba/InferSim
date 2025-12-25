@@ -64,11 +64,11 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
 
     t_dequant_per_token = total_dequant_cycles * dim_nope * cycle_time
 
-    tile_num = 128
+    quant_tile_size = 128
     sizeof_fp8 = 1
     sizeof_bf16 = 2
 
-    t_load_scales = (dim_nope) / tile_num * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
+    t_load_scales = (dim_nope) / quant_tile_size * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
     t_load_nope = dim_nope * sizeof_fp8 / gpu.mem_bw / 1e9 * gpu.num_sm
     t_load_rope = sizeof_bf16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
 
