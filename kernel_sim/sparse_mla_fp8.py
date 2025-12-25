@@ -118,12 +118,6 @@ if __name__ == "__main__":
 
     config = ModelConfig(args.config_path)
 
-    dim = config.kv_lora_rank
-    num_heads = config.num_attention_heads
-    topk = config.index_topk
-    dim_rope = config.qk_rope_head_dim
-    batch_size = 128
-
     time_ms, theoretical_max_tflops = sparse_mla_fp8(
         batch_size=128,
         num_heads=config.num_attention_heads,
