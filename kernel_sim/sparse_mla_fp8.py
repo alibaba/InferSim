@@ -124,7 +124,7 @@ if __name__ == "__main__":
     dim_rope = config.qk_rope_head_dim
     batch_size = 128
 
-    time_ms, tflops = sparse_mla_fp8(
+    time_ms, theoretical_max_tflops = sparse_mla_fp8(
         batch_size=batch_size,
         num_heads=num_heads,
         seq_len=args.seq_len,
@@ -134,4 +134,4 @@ if __name__ == "__main__":
         dim_rope=dim_rope,
     )
     print(f"Time: {time_ms:.6f} ms")
-    print(f"TFLOPS: {tflops:.6f}")
+    print(f"TFLOPS: {theoretical_max_tflops:.6f}")
