@@ -17,7 +17,7 @@ DEQUANT_CYCLES = {
 }
 
 
-def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
+def sparse_mla_fp8(batch_size, num_heads, seq_len, topk, dim, gpu_type, dim_rope):
     gpu = gpu_map[gpu_type]
 
     block_m = 64
@@ -26,13 +26,13 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
     compute_volume_flop = (
         batch_size
         * num_heads
-        * s_q
+        * seq_len
         * sum([2 * (dim_nope + dim_rope) * topk, 2 * topk * dim_nope])
     )
 
     num_heads_per_block = block_m if block_m < num_heads else num_heads
 
-    t_mma_per_token = (
+    time_mma_per_token = (
         num_heads_per_block
         * (dim_nope + dim_nope + dim_rope)
         * 2
@@ -56,33 +56,34 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
         + bf16_mul_fp32_cycles
     )
 
-    t_dequant_per_token = total_dequant_cycles * dim_nope * cycle_time
+    time_dequant_per_token = total_dequant_cycles * dim_nope * cycle_time
 
     quant_tile_size = 128
     sizeof_fp8 = 1
     sizeof_bf16 = 2
 
-    t_load_scales = (dim_nope) / quant_tile_size * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
-    t_load_nope = dim_nope * sizeof_fp8 / gpu.mem_bw / 1e9 * gpu.num_sm
-    t_load_rope = sizeof_bf16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
+    time_load_scales = (dim_nope) / quant_tile_size * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
+    time_load_nope = dim_nope * sizeof_fp8 / gpu.mem_bw / 1e9 * gpu.num_sm
+    time_load_rope = sizeof_bf16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
 
-    t_load_kv_per_token = t_load_scales + t_load_nope + t_load_rope
+    time_load_kv_per_token = time_load_scales + time_load_nope + time_load_rope
 
-    t_load_and_dequant_per_token = t_load_kv_per_token + t_dequant_per_token
+    time_load_and_dequant_per_token = time_load_kv_per_token + time_dequant_per_token
 
-    t_mma_per_block = block_m * t_mma_per_token
-    t_load_and_dequant_per_block = (block_m // 2) * t_load_and_dequant_per_token
+    time_mma_per_block = block_m * time_mma_per_token
+    time_mma_per_block = time_mma_per_block if time_mma_per_block > 0 else 1e-9
+    time_load_and_dequant_per_block = (block_m // 2) * time_load_and_dequant_per_token
 
-    t_per_block = (
-        s_q * t_load_and_dequant_per_block
-        if t_load_and_dequant_per_block > t_mma_per_block
-        else s_q * t_mma_per_block
+    time_per_block = (
+        seq_len * time_load_and_dequant_per_block
+        if time_load_and_dequant_per_block > time_mma_per_block
+        else seq_len * time_load_and_dequant_per_token + time_mma_per_block
     )
 
     sum_block = topk / block_m * batch_size
     num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
 
-    time = num_block_per_sm_parts * t_per_block * 2
+    time = num_block_per_sm_parts * time_per_block * 2
 
     time_usage = time * 1000
     theoretical_max_tflops = compute_volume_flop / time / 1e12
@@ -93,7 +94,7 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sparse MLA FP8 simulation")
     parser.add_argument(
-        "--s_q", type=int, required=True, help="Sequence length for query"
+        "--seq_len", type=int, required=True, help="Sequence length for query"
     )
     parser.add_argument(
         "--config_path",
@@ -120,7 +121,7 @@ if __name__ == "__main__":
     time_ms, tflops = sparse_mla_fp8(
         batch_size=batch_size,
         num_heads=num_heads,
-        s_q=args.s_q,
+        seq_len=args.seq_len,
         topk=topk,
         dim=dim,
         gpu_type=args.gpu_type,
