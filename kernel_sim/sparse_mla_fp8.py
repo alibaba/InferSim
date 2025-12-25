@@ -20,7 +20,7 @@ DEQUANT_CYCLES = {
 def sparse_mla_fp8(batch_size, num_heads, seq_len, topk, dim, gpu_type, dim_rope):
     gpu = gpu_map[gpu_type]
 
-    block_m = 64
+    BLOCK_M = 64
     dim_nope = dim
 
     compute_volume_flop = (
@@ -30,7 +30,7 @@ def sparse_mla_fp8(batch_size, num_heads, seq_len, topk, dim, gpu_type, dim_rope
         * sum([2 * (dim_nope + dim_rope) * topk, 2 * topk * dim_nope])
     )
 
-    num_heads_per_block = block_m if block_m < num_heads else num_heads
+    num_heads_per_block = BLOCK_M if BLOCK_M < num_heads else num_heads
 
     time_mma_per_token = (
         num_heads_per_block
@@ -58,37 +58,34 @@ def sparse_mla_fp8(batch_size, num_heads, seq_len, topk, dim, gpu_type, dim_rope
 
     time_dequant_per_token = total_dequant_cycles * dim_nope * cycle_time
 
-    quant_tile_size = 128
-    sizeof_fp8 = 1
-    sizeof_bf16 = 2
+    QUANT_TILE_SIZE = 128
+    SIZEOF_BF16 = 2
+    SIZEOF_FP8 = 1
 
-    time_load_scales = (dim_nope) / quant_tile_size * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
-    time_load_nope = dim_nope * sizeof_fp8 / gpu.mem_bw / 1e9 * gpu.num_sm
-    time_load_rope = sizeof_bf16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
+    time_load_scales = dim_nope / QUANT_TILE_SIZE * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
+    time_load_nope = dim_nope * SIZEOF_FP8 / gpu.mem_bw / 1e9 * gpu.num_sm
+    time_load_rope = SIZEOF_BF16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
 
     time_load_kv_per_token = time_load_scales + time_load_nope + time_load_rope
 
     time_load_and_dequant_per_token = time_load_kv_per_token + time_dequant_per_token
 
-    time_mma_per_block = block_m * time_mma_per_token
-    time_mma_per_block = time_mma_per_block if time_mma_per_block > 0 else 1e-9
-    time_load_and_dequant_per_block = (block_m // 2) * time_load_and_dequant_per_token
+    time_mma_per_block = BLOCK_M * time_mma_per_token
+    time_load_and_dequant_per_block = (BLOCK_M // 2) * time_load_and_dequant_per_token
 
-    time_per_block = (
-        seq_len * time_load_and_dequant_per_block
-        if time_load_and_dequant_per_block > time_mma_per_block
-        else seq_len * time_load_and_dequant_per_token + time_mma_per_block
+    time_per_block = max(
+        seq_len * time_load_and_dequant_per_block, seq_len * time_mma_per_block
     )
 
-    sum_block = topk / block_m * batch_size
+    sum_block = topk / BLOCK_M * batch_size
     num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
 
     time = num_block_per_sm_parts * time_per_block * 2
 
-    time_usage = time * 1000
+    time_ms = time * 1000
     theoretical_max_tflops = compute_volume_flop / time / 1e12
 
-    return time_usage, theoretical_max_tflops
+    return time_ms, theoretical_max_tflops
 
 
 if __name__ == "__main__":
