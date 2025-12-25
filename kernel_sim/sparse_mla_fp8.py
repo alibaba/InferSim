@@ -20,7 +20,7 @@ DEQUANT_CYCLES = {
 def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
     gpu = gpu_map[gpu_type]
 
-    block_M = 64
+    block_m = 64
     dim_nope = dim
 
     compute_volume_flop = (
@@ -30,9 +30,9 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
         * sum([2 * (dim_nope + dim_rope) * topk, 2 * topk * dim_nope])
     )
 
-    num_heads_per_block = block_M if block_M < num_heads else num_heads
+    num_heads_per_block = block_m if block_m < num_heads else num_heads
 
-    t_MMA_per_token = (
+    t_mma_per_token = (
         num_heads_per_block
         * (dim_nope + dim_nope + dim_rope)
         * 2
@@ -66,23 +66,23 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type, dim_rope):
     t_load_nope = dim_nope * sizeof_fp8 / gpu.mem_bw / 1e9 * gpu.num_sm
     t_load_rope = sizeof_bf16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
 
-    t_load_KV_per_token = t_load_scales + t_load_nope + t_load_rope
+    t_load_kv_per_token = t_load_scales + t_load_nope + t_load_rope
 
-    t_load_and_dequant_per_token = t_load_KV_per_token + t_dequant_per_token
+    t_load_and_dequant_per_token = t_load_kv_per_token + t_dequant_per_token
 
-    t_MMA_per_block = block_M * t_MMA_per_token
-    t_load_and_dequant_per_block = (block_M // 2) * t_load_and_dequant_per_token
+    t_mma_per_block = block_m * t_mma_per_token
+    t_load_and_dequant_per_block = (block_m // 2) * t_load_and_dequant_per_token
 
     t_per_block = (
         s_q * t_load_and_dequant_per_block
-        if t_load_and_dequant_per_block > t_MMA_per_block
-        else s_q * t_MMA_per_block
+        if t_load_and_dequant_per_block > t_mma_per_block
+        else s_q * t_mma_per_block
     )
 
-    sum_block = topk / block_M * batch_size
-    num_block_per_SM_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
+    sum_block = topk / block_m * batch_size
+    num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
 
-    time = num_block_per_SM_parts * t_per_block * 2
+    time = num_block_per_sm_parts * t_per_block * 2
 
     time_usage = time * 1000
     theoretical_max_tflops = compute_volume_flop / time / 1e12
@@ -95,16 +95,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--s_q", type=int, required=True, help="Sequence length for query"
     )
-    # parser.add_argument("--topk", type=int, required=True, help="Top-k value")
+    parser.add_argument(
+        "--config_path",
+        type=str,
+        default=os.path.join(
+            os.path.dirname(__file__), "..", "hf_configs", "deepseek_v3.2_config.json"
+        ),
+        help="Path to model configuration file (default: deepseek_v3.2_config.json)",
+    )
     parser.add_argument(
         "--gpu_type", type=str, required=True, help="GPU type (e.g., H800, H20)"
     )
-    config_path = os.path.join(
-        os.path.dirname(__file__), "..", "hf_configs", "deepseek_v3.2_config.json"
-    )
-    config = ModelConfig(config_path)
 
     args = parser.parse_args()
+
+    config = ModelConfig(args.config_path)
 
     dim = config.kv_lora_rank
     num_heads = config.num_attention_heads
