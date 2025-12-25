@@ -17,7 +17,15 @@ DEQUANT_CYCLES = {
 }
 
 
-def sparse_mla_fp8(batch_size, num_heads, seq_len, topk, dim, gpu_type, dim_rope):
+def sparse_mla_fp8(
+    batch_size: int,
+    num_heads: int,
+    seq_len: int,
+    topk: int,
+    dim: int,
+    gpu_type: str,
+    dim_rope: int,
+) -> tuple[float, float]:
     gpu = gpu_map[gpu_type]
 
     BLOCK_M = 64
