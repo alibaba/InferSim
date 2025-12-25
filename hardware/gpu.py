@@ -10,9 +10,9 @@ class GPU:
     mem_bw: float  # GB/s
     nvlink_bw: float  # unidirectional GB/s
     rdma_bw: float  # unidirectional GB/s
-    frequency: float = None # MHz
+    frequency: float = None  # MHz
     num_sm: int = None
-    compute_capability: float = None
+    compute_capability: int = None
 
 
 h20 = GPU(
@@ -25,7 +25,7 @@ h20 = GPU(
     rdma_bw=50 * 0.8,
     frequency=1980 * 0.9,
     num_sm=78,
-    compute_capability=9.0,
+    compute_capability=90,
 )  # 25GB/s for 4 ibv devices, 50GB/s for 8 ibv devices
 
 h800 = GPU(
@@ -38,7 +38,7 @@ h800 = GPU(
     rdma_bw=50 * 0.8,
     frequency=1980 * 0.9,
     num_sm=132,
-    compute_capability=9.0,
+    compute_capability=90,
 )
 
 h200 = GPU(
