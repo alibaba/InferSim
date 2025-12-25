@@ -46,6 +46,7 @@ class ModelConfig:
             self.kv_lora_rank = d["kv_lora_rank"]
             self.num_attention_heads = d["num_attention_heads"]
             self.v_head_dim = d["v_head_dim"]
+            self.index_topk = d.get("index_topk")
             self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim
 
         # FFN/MoE
