@@ -36,10 +36,7 @@ def sparse_mla_fp8(
     dim_nope = dim
 
     compute_volume_flop = (
-        batch_size
-        * num_heads
-        * seq_len
-        * sum([2 * (dim_nope + dim_rope) * topk, 2 * topk * dim_nope])
+        batch_size * num_heads * seq_len * 2 * topk * (dim_nope + dim_rope + dim_nope)
     )
 
     num_heads_per_block = min(BLOCK_M, num_heads)
@@ -89,7 +86,7 @@ def sparse_mla_fp8(
     sum_block = topk // BLOCK_M * batch_size
     num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
 
-    time = num_block_per_sm_parts * time_per_block * 2
+    time = num_block_per_sm_parts * time_per_block * 2  # 2-stage pipeline
 
     time_ms = time * 1000
     theoretical_max_tflops = compute_volume_flop / time / 1e12
