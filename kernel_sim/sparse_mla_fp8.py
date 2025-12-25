@@ -111,7 +111,7 @@ if __name__ == "__main__":
         help="Path to model configuration file (default: deepseek_v3.2_config.json)",
     )
     parser.add_argument(
-        "--gpu_type", type=str, required=True, help="GPU type (e.g., H800, H20)"
+        "--gpu_type", type=str, required=True, help="GPU type (e.g., H20, H800)"
     )
 
     args = parser.parse_args()
