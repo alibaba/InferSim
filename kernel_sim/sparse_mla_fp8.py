@@ -49,7 +49,7 @@ def sparse_mla_fp8(batch_size, num_heads, s_q, topk, dim, gpu_type):
 
     cycle_time = 1 / gpu.frequency / 1e6
 
-    cycles = DEQUANT_CYCLES[gpu.compute_capability]
+    cycles = DEQUANT_CYCLES[gpu.sm_version]
     fp8_to_half_cycles = cycles["fp8_to_half"]
     half_to_fp32_cycles = cycles["half_to_fp32"]
     fp32_to_bf16_cycles = cycles["fp32_to_bf16"]
