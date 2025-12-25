@@ -125,13 +125,13 @@ if __name__ == "__main__":
     batch_size = 128
 
     time_ms, theoretical_max_tflops = sparse_mla_fp8(
-        batch_size=batch_size,
-        num_heads=num_heads,
+        batch_size=128,
+        num_heads=config.num_attention_heads,
         seq_len=args.seq_len,
-        topk=topk,
-        dim=dim,
+        topk=config.index_topk,
+        dim=config.kv_lora_rank,
         gpu_type=args.gpu_type,
-        dim_rope=dim_rope,
+        dim_rope=config.qk_rope_head_dim,
     )
     print(f"Time: {time_ms:.6f} ms")
     print(f"TFLOPS: {theoretical_max_tflops:.6f}")
