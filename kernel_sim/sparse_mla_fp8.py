@@ -16,6 +16,11 @@ DEQUANT_CYCLES = {
     }
 }
 
+BLOCK_M = 64
+QUANT_TILE_SIZE = 128
+SIZEOF_BF16 = 2
+SIZEOF_FP8 = 1
+
 
 def sparse_mla_fp8(
     batch_size: int,
@@ -28,7 +33,6 @@ def sparse_mla_fp8(
 ) -> tuple[float, float]:
     gpu = gpu_map[gpu_type]
 
-    BLOCK_M = 64
     dim_nope = dim
 
     compute_volume_flop = (
@@ -38,7 +42,7 @@ def sparse_mla_fp8(
         * sum([2 * (dim_nope + dim_rope) * topk, 2 * topk * dim_nope])
     )
 
-    num_heads_per_block = BLOCK_M if BLOCK_M < num_heads else num_heads
+    num_heads_per_block = min(BLOCK_M, num_heads)
 
     time_mma_per_token = (
         num_heads_per_block
@@ -67,10 +71,6 @@ def sparse_mla_fp8(
 
     time_dequant_per_token = total_dequant_cycles * dim_nope * cycle_time
 
-    QUANT_TILE_SIZE = 128
-    SIZEOF_BF16 = 2
-    SIZEOF_FP8 = 1
-
     time_load_scales = dim_nope / QUANT_TILE_SIZE * 4 / gpu.mem_bw / 1e9 * gpu.num_sm
     time_load_nope = dim_nope * SIZEOF_FP8 / gpu.mem_bw / 1e9 * gpu.num_sm
     time_load_rope = SIZEOF_BF16 * dim_rope / gpu.mem_bw / 1e9 * gpu.num_sm
@@ -80,14 +80,14 @@ def sparse_mla_fp8(
     time_load_and_dequant_per_token = time_load_kv_per_token + time_dequant_per_token
 
     time_mma_per_block = BLOCK_M * time_mma_per_token
-    time_load_and_dequant_per_block = (BLOCK_M / 2) * time_load_and_dequant_per_token
+    time_load_and_dequant_per_block = (BLOCK_M // 2) * time_load_and_dequant_per_token
 
     time_per_block = max(
         seq_len * time_load_and_dequant_per_block, seq_len * time_mma_per_block
     )
 
-    sum_block = topk / BLOCK_M * batch_size
-    num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) / gpu.num_sm
+    sum_block = topk // BLOCK_M * batch_size
+    num_block_per_sm_parts = (sum_block + gpu.num_sm - 1) // gpu.num_sm
 
     time = num_block_per_sm_parts * time_per_block * 2
 
