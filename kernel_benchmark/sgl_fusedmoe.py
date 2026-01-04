@@ -1,55 +1,19 @@
+import argparse
 import os
 import sys
-import argparse
 
 import torch
 import triton
-
-
 from sglang.srt.layers.moe.fused_moe_triton.fused_moe import (
     fused_moe as fused_moe_sglang,
 )
-from sglang.srt.layers.moe.fused_moe_triton.triton_kernels_moe import (
-    triton_kernel_moe_forward,
-)
-from sglang.srt.layers.moe.moe_runner import MoeRunnerConfig
-from sglang.srt.layers.moe.topk import TopK, TopKConfig, select_experts
+from sglang.srt.layers.moe.topk import TopKConfig, select_experts
+from sglang.srt.server_args import ServerArgs, set_global_server_args_for_scheduler
 
 parent_dir = os.path.join(os.path.dirname(__file__), "..")
 sys.path.append(os.path.abspath(parent_dir))
 
 from config.model_config import ModelConfig  # noqa E402
-from sglang.srt.server_args import ServerArgs, set_global_server_args_for_scheduler
-
-
-def fused_moe_triton_api(
-    x,
-    w1,
-    w2,
-    input_gating,
-    topk,
-):
-    topk_op = TopK(
-        top_k=topk,
-        renormalize=False,
-        use_grouped_topk=False,
-    )
-    topk_op.use_triton_kernels = True
-    triton_topk_output = topk_op.forward_cuda(
-        hidden_states=x,
-        router_logits=input_gating,
-    )
-
-    moe_runner_config = MoeRunnerConfig(
-        inplace=False,
-    )
-    return triton_kernel_moe_forward(
-        x,
-        w1,
-        w2,
-        triton_topk_output,
-        moe_runner_config,
-    )
 
 
 def fused_moe_sglang_api(
@@ -90,11 +54,9 @@ def fused_moe_sglang_api(
         x_vals=list([128, 256, 512, 1024, 2048, 4096, 8192]),
         line_arg="provider",
         line_vals=[
-            # "sglang_fused_moe_triton_v340",
             "sglang_fused_moe_triton",
         ],
         line_names=[
-            # "sglang_fused_moe_triton_v340",
             "sglang_fused_moe_triton",
         ],
         styles=[
@@ -131,9 +93,7 @@ def benchmark(
     x = torch.randn(num_tokens, hidden_size, dtype=dtype)
 
     w1 = torch.randn(num_experts, shard_intermediate_size * 2, hidden_size, dtype=dtype)
-    w2 = torch.randn(
-        num_experts, hidden_size, shard_intermediate_size, dtype=dtype
-    )
+    w2 = torch.randn(num_experts, hidden_size, shard_intermediate_size, dtype=dtype)
 
     w1_tri = w1.clone()
     w2_tri = w2.clone()
@@ -142,16 +102,7 @@ def benchmark(
 
     input_gating = torch.randn(num_tokens, num_experts, dtype=torch.float32)
 
-    if provider == "sglang_fused_moe_triton_v340":
-        api_func = fused_moe_triton_api
-        api_kwargs = {
-            "x": x,
-            "w1": w1_tri,
-            "w2": w2_tri,
-            "input_gating": input_gating,
-            "topk": topk,
-        }
-    else:
+    if provider == "sglang_fused_moe_triton":
         api_func = fused_moe_sglang_api
         api_kwargs = {
             "x": x,
@@ -175,9 +126,9 @@ def benchmark(
             api_func(**api_kwargs)
         torch.cuda.synchronize()
 
-        bench_lambda = lambda: graph.replay()
+        bench_lambda = lambda: graph.replay()  # noqa E731
     else:
-        bench_lambda = lambda: api_func(**api_kwargs)
+        bench_lambda = lambda: api_func(**api_kwargs)  # noqa E731
 
     quantiles = [0.5, 0.2, 0.8]
     ms, min_ms, max_ms = triton.testing.do_bench(bench_lambda, quantiles=quantiles)
@@ -186,9 +137,7 @@ def benchmark(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config-path", type=str
-    )
+    parser.add_argument("--config-path", type=str)
     parser.add_argument("--tp-size", "--tp", type=int, default=2)
     parser.add_argument("--ep-size", "--ep", type=int, default=1)
     parser.add_argument("--use-fp8-w8a8", action="store_true")
