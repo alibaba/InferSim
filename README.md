@@ -28,25 +28,27 @@ For more details, please check [InferSim Technical Report](https://github.com/us
 
 ```
 $ python3 main.py --help
-usage: main.py [-h] --config-path CONFIG_PATH [--device-type {H20,H800}] [--world-size WORLD_SIZE] [--num-nodes NUM_NODES]
-               [--max-prefill-tokens MAX_PREFILL_TOKENS] [--decode-bs DECODE_BS] [--target-tgs TARGET_TGS]
-               [--target-tpot TARGET_TPOT] [--target-isl TARGET_ISL] [--target-osl TARGET_OSL] [--use-fp8-gemm]
-               [--use-fp8-kv] [--enable-deepep] [--enable-tbo] [--sm-ratio SM_RATIO] [--prefill-only] [--decode-only]
+usage: main.py [-h] --config-path CONFIG_PATH [--device-type {H20,H800,H200,GB200}]
+               [--world-size WORLD_SIZE] [--num-nodes NUM_NODES]
+               [--max-prefill-tokens MAX_PREFILL_TOKENS] [--decode-bs DECODE_BS]
+               [--target-tgs TARGET_TGS] [--target-tpot TARGET_TPOT] [--target-isl TARGET_ISL]
+               [--target-osl TARGET_OSL] [--use-fp8-gemm] [--use-fp8-kv] [--enable-deepep]
+               [--enable-tbo] [--sm-ratio SM_RATIO] [--prefill-only] [--decode-only]
 
 optional arguments:
   -h, --help            show this help message and exit
   --config-path CONFIG_PATH
                         The path of the hf model config.json
-  --device-type {H20,H800}
+  --device-type {H20,H800,H200,GB200}
                         Device type
   --world-size WORLD_SIZE
                         Num of GPUs
   --num-nodes NUM_NODES
                         Num of nodes
   --max-prefill-tokens MAX_PREFILL_TOKENS
-                        Max prefill tokens
+                        Max prefill tokens per GPU
   --decode-bs DECODE_BS
-                        Decoding batchsize. If not specified, bs = tgs * tpot.
+                        Decoding batchsize per GPU. If not specified, bs = tgs * tpot.
   --target-tgs TARGET_TGS
                         Target tokens/s per GPU
   --target-tpot TARGET_TPOT
