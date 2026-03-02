@@ -48,12 +48,12 @@ if __name__ == "__main__":
     parser.add_argument("--world-size", type=int, default=1, help="Num of GPUs")
     parser.add_argument("--num-nodes", type=int, default=1, help="Num of nodes")
     parser.add_argument(
-        "--max-prefill-tokens", type=int, default=4096, help="Max prefill tokens"
+        "--max-prefill-tokens", type=int, default=4096, help="Max prefill tokens per GPU"
     )
     parser.add_argument(
         "--decode-bs",
         type=int,
-        help="Decoding batchsize. If not specified, bs = tgs * tpot.",
+        help="Decoding batchsize per GPU. If not specified, bs = tgs * tpot.",
     )
     parser.add_argument(
         "--target-tgs", type=float, default=2560, help="Target tokens/s per GPU"
