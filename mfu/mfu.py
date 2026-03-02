@@ -13,7 +13,7 @@ def get_attn_decode_mfu(config, target_bs, kv_len, device_type, use_fp8_kv):
         head_dim = f"{config.kv_lora_rank}-{config.qk_rope_head_dim}"
         file_name = f"bench_data/mla/decode/{device_type.lower()}/{config.num_attention_heads}-{head_dim}.csv"
     if not os.path.exists(file_name):
-        print(f"warning: {file_name} not exists")
+        print(f"Warning: {file_name} not exists")
         return gpu.mfu
 
     # row: dtype,kv_dtype,batch_size,kv_len,latency,mfu
@@ -62,7 +62,7 @@ def get_attn_prefill_mfu(config, seq_len, device_type):
         head_dim = f"{config.qk_nope_head_dim}-{config.qk_rope_head_dim}"
         file_name = f"bench_data/mla/prefill/{device_type.lower()}/{config.num_attention_heads}-{head_dim}.csv"
     if not os.path.exists(file_name):
-        print(f"warning: {file_name} not exist.")
+        print(f"Warning: {file_name} not exist.")
         return 0.9
 
     # row: dtype,seq_len,latecy_us,mfu
@@ -111,6 +111,9 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
                 continue
             rows.append(row)
 
+    if len(rows) == 0:
+        print("Warning: grouped_gemm decode mfu not found, will use default mfu.")
+
     mfu1 = gpu.mfu
     mfu2 = gpu.mfu
     for row in rows:
@@ -128,7 +131,7 @@ def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8)
     gpu = gpu_map[device_type]
     file_name = f"bench_data/grouped_gemm/prefill/{device_type.lower()}/data.csv"
     if not os.path.exists(file_name):
-        print(f"warning: {file_name} not exists")
+        print(f"Warning: {file_name} not exists")
         return gpu.mfu, gpu.mfu
 
     # row: num_experts,num_gpus,num_local_experts,topk,hidden_size,intermediate_size,seq_len_per_gpu,tokens_per_expert,up_proj_us,up_mfu,down_proj_us,down_mfu
@@ -149,6 +152,9 @@ def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8)
                 continue
             rows.append(row)
 
+    if len(rows) == 0:
+        print("Warning: grouped_gemm prefill mfu not found, will use default mfu.")
+
     mfu1 = gpu.mfu
     mfu2 = gpu.mfu
     for row in rows:
@@ -166,7 +172,7 @@ def get_gemm_mfu(device_type, m, k, n):
     gpu = gpu_map[device_type]
     file_name = f"bench_data/gemm/{device_type.lower()}/data.csv"
     if not os.path.exists(file_name):
-        print(f"warning: {file_name} not exists")
+        print(f"Warning: {file_name} not exists")
         return gpu.mfu
 
     mfu_k = 0
