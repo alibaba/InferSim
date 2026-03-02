@@ -17,6 +17,7 @@ def main(args):
 
     if config.is_hybrid_linear:
         model = HybridModel(args, config)
+        print("{:<40} {:<10}".format("Model type: ", "HybridModel"))
     else:
         model = Model(args, config)
     model.print_weights_info()
@@ -48,7 +49,10 @@ if __name__ == "__main__":
     parser.add_argument("--world-size", type=int, default=1, help="Num of GPUs")
     parser.add_argument("--num-nodes", type=int, default=1, help="Num of nodes")
     parser.add_argument(
-        "--max-prefill-tokens", type=int, default=4096, help="Max prefill tokens per GPU"
+        "--max-prefill-tokens",
+        type=int,
+        default=4096,
+        help="Max prefill tokens per GPU",
     )
     parser.add_argument(
         "--decode-bs",
