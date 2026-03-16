@@ -148,10 +148,10 @@ def main(args) -> None:
     config = ModelConfig(args.config_path)
     results = []
 
-    for world_size in [4, 8]:
+    for world_size in [1, 4]:
         num_local_experts = config.num_routed_experts // world_size
         num_groups = num_local_experts
-        for bs in [8, 16, 32, 64, 128, 256, 512, 1024]:
+        for bs in [8, 16, 32, 64, 128, 224]:
             expected_m_per_group = round(bs * config.num_experts_per_tok / num_groups)
             print(f"expected_m_per_group: {expected_m_per_group}")
             if expected_m_per_group < 16:

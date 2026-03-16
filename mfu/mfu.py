@@ -113,19 +113,13 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
 
     if len(rows) == 0:
         print("Warning: grouped_gemm decode mfu not found, will use default mfu.")
+        return gpu.mfu, gpu.mfu
 
-    mfu1 = gpu.mfu
-    mfu2 = gpu.mfu
-    for row in rows:
-        bs = int(row[6])
-        if bs <= target_bs:
-            mfu1 = float(row[9])
-            mfu2 = float(row[11])
-        else:
-            break
+    closest_row = min(rows, key=lambda r: abs(int(r[6]) - target_bs))
+    mfu1 = float(closest_row[9])
+    mfu2 = float(closest_row[11])
 
     return round(mfu1, 3), round(mfu2, 3)
-
 
 def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8):
     gpu = gpu_map[device_type]
@@ -227,7 +221,7 @@ def get_linear_attn_prefill_latency(config, seq_len, device_type):
     ratio = int(rows[idx][0]) / seq_len
     t = 0
     for i in range(1, len(rows[idx])):
-        t += float(rows[idx][i]) * ratio
+        t += float(rows[idx][i]) / ratio
     return t  # latency in us
 
 
@@ -253,5 +247,5 @@ def get_linear_attn_decode_latency(config, batchsize, device_type):
     ratio = int(rows[idx][0]) / batchsize
     t = 0
     for i in range(1, len(rows[idx])):
-        t += float(rows[idx][i]) * ratio
+        t += float(rows[idx][i]) / ratio
     return t  # latency in us
