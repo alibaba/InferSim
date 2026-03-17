@@ -17,7 +17,7 @@ from sglang.srt.layers.attention.fla.wy_fast import recompute_w_u_fwd
 
 @dataclasses.dataclass
 class TestParam:
-    seq_len: int = 4096
+    seq_len: int = 8192
     Hk: int = 16
     Hv: int = 32
     D: int = 128
@@ -56,9 +56,11 @@ def generate_testcase(t: TestParam) -> Testcase:
         dim=-1,
     )
     beta = torch.randn(
-        (1, t.seq_len, t.Hv), dtype=torch.bfloat16, device=device
+        (1, t.seq_len, t.Hv), dtype=torch.float32, device=device
     ).sigmoid()
-    cu_seqlens = torch.tensor([0, t.seq_len], dtype=torch.int32, device=device)
+    cu_seqlens = torch.tensor(
+        [0, t.seq_len // 2, t.seq_len], dtype=torch.int32, device=device
+    )
     g = torch.randn((1, t.seq_len, t.Hv), dtype=torch.float32, device=device)
     g = chunk_local_cumsum(g, chunk_size=t.chunk_size, cu_seqlens=cu_seqlens)
     initial_state = torch.randn((1, t.Hv, t.D, t.D), dtype=torch.float32, device=device)
@@ -172,7 +174,7 @@ if __name__ == "__main__":
     torch.cuda.set_device(device)
     torch.set_float32_matmul_precision("high")
 
-    performance_cases = [TestParam(seq_len=seq_len) for seq_len in [4096]]
+    performance_cases = [TestParam(seq_len=seq_len) for seq_len in [8192]]
 
     testcases = performance_cases
 
