@@ -17,7 +17,7 @@ from sglang.srt.layers.attention.fla.wy_fast import recompute_w_u_fwd
 
 @dataclasses.dataclass
 class TestParam:
-    seq_len: int = 8192
+    seq_len: int = 4096
     Hk: int = 16
     Hv: int = 32
     D: int = 128
@@ -56,16 +56,12 @@ def generate_testcase(t: TestParam) -> Testcase:
         dim=-1,
     )
     beta = torch.randn(
-        (1, t.seq_len, t.Hv), dtype=torch.float32, device=device
+        (1, t.seq_len, t.Hv), dtype=torch.bfloat16, device=device
     ).sigmoid()
-    cu_seqlens = torch.tensor(
-        [0, t.seq_len // 3 // 64 * 64, t.seq_len * 2 // 3 // 64 * 64, t.seq_len],
-        dtype=torch.int32, device=device
-    )
+    cu_seqlens = torch.tensor([0, t.seq_len], dtype=torch.int32, device=device)
     g = torch.randn((1, t.seq_len, t.Hv), dtype=torch.float32, device=device)
     g = chunk_local_cumsum(g, chunk_size=t.chunk_size, cu_seqlens=cu_seqlens)
-    pool_size = 440
-    initial_state = torch.randn((pool_size, t.Hv, t.D, t.D), dtype=torch.float32, device=device)
+    initial_state = torch.randn((1, t.Hv, t.D, t.D), dtype=torch.float32, device=device)
 
     return Testcase(
         t=t,
@@ -129,10 +125,6 @@ def run_test(p: TestParam) -> bool:
     w, u = run_w_u()
     torch.cuda.synchronize()
 
-    # 构造 initial_state_indices
-    num_seqs = t.cu_seqlens.shape[0] - 1
-    initial_state_indices = torch.arange(num_seqs, dtype=torch.int32, device=t.k.device)
-
     def run_chunk_gdn_fwd_h():
         return chunk_gated_delta_rule_fwd_h(
             k=t.k,
@@ -140,7 +132,7 @@ def run_test(p: TestParam) -> bool:
             u=u,
             g=t.g,
             initial_state=t.initial_state,
-            initial_state_indices=initial_state_indices,
+            output_final_state=True,
             cu_seqlens=t.cu_seqlens,
         )
 
@@ -149,7 +141,7 @@ def run_test(p: TestParam) -> bool:
     )  # type: ignore
     print(f"chunk_gated_delta_rule_fwd_h:  {ans_time * 1e6:4.0f} us")
 
-    h, v_new = run_chunk_gdn_fwd_h()
+    h, v_new, final_state = run_chunk_gdn_fwd_h()
     torch.cuda.synchronize()
 
     def run_chunk_fwd_o():
@@ -176,7 +168,7 @@ if __name__ == "__main__":
     torch.cuda.set_device(device)
     torch.set_float32_matmul_precision("high")
 
-    performance_cases = [TestParam(seq_len=seq_len) for seq_len in [8192]]
+    performance_cases = [TestParam(seq_len=seq_len) for seq_len in [4096]]
 
     testcases = performance_cases
 
