@@ -59,11 +59,13 @@ def generate_testcase(t: TestParam) -> Testcase:
         (1, t.seq_len, t.Hv), dtype=torch.float32, device=device
     ).sigmoid()
     cu_seqlens = torch.tensor(
-        [0, t.seq_len // 2, t.seq_len], dtype=torch.int32, device=device
+        [0, t.seq_len // 3 // 64 * 64, t.seq_len * 2 // 3 // 64 * 64, t.seq_len],
+        dtype=torch.int32, device=device
     )
     g = torch.randn((1, t.seq_len, t.Hv), dtype=torch.float32, device=device)
     g = chunk_local_cumsum(g, chunk_size=t.chunk_size, cu_seqlens=cu_seqlens)
-    initial_state = torch.randn((1, t.Hv, t.D, t.D), dtype=torch.float32, device=device)
+    pool_size = 440
+    initial_state = torch.randn((pool_size, t.Hv, t.D, t.D), dtype=torch.float32, device=device)
 
     return Testcase(
         t=t,
@@ -128,8 +130,8 @@ def run_test(p: TestParam) -> bool:
     torch.cuda.synchronize()
 
     # 构造 initial_state_indices
-    batch_size = t.k.shape[0]
-    initial_state_indices = torch.zeros(batch_size, dtype=torch.int32, device=t.k.device)
+    num_seqs = t.cu_seqlens.shape[0] - 1
+    initial_state_indices = torch.arange(num_seqs, dtype=torch.int32, device=t.k.device)
 
     def run_chunk_gdn_fwd_h():
         return chunk_gated_delta_rule_fwd_h(

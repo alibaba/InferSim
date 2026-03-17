@@ -13,7 +13,7 @@ from sgl_kernel import causal_conv1d_update as causal_conv1d_update_kernel
 class TestParam:
     batchsize: int = 1
     width: int = 4
-    dim: int = 8192
+    dim: int = 2048
     seed: int = 1024
 
 
