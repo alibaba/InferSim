@@ -125,6 +125,10 @@ def run_test(p: TestParam) -> bool:
     w, u = run_w_u()
     torch.cuda.synchronize()
 
+    # 构造 initial_state_indices
+    batch_size = t.k.shape[0]
+    initial_state_indices = torch.zeros(batch_size, dtype=torch.int32, device=t.k.device)
+
     def run_chunk_gdn_fwd_h():
         return chunk_gated_delta_rule_fwd_h(
             k=t.k,
@@ -132,7 +136,7 @@ def run_test(p: TestParam) -> bool:
             u=u,
             g=t.g,
             initial_state=t.initial_state,
-            output_final_state=True,
+            initial_state_indices=initial_state_indices,
             cu_seqlens=t.cu_seqlens,
         )
 
@@ -141,7 +145,7 @@ def run_test(p: TestParam) -> bool:
     )  # type: ignore
     print(f"chunk_gated_delta_rule_fwd_h:  {ans_time * 1e6:4.0f} us")
 
-    h, v_new, final_state = run_chunk_gdn_fwd_h()
+    h, v_new = run_chunk_gdn_fwd_h()
     torch.cuda.synchronize()
 
     def run_chunk_fwd_o():
