@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     performance_cases = [
         TestParam(bs=bs)
-        for bs in [3, 6, 8, 16, 24, 32, 48, 64, 96, 128, 192, 224, 256, 384, 512]
+        for bs in [3, 6, 8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512]
     ]
 
     for test in performance_cases:

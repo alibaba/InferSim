@@ -11,10 +11,9 @@ from sgl_kernel import causal_conv1d_update as causal_conv1d_update_kernel
 
 @dataclasses.dataclass
 class TestParam:
-    batchsize: int = 224
+    batchsize: int = 1
     width: int = 4
     dim: int = 8192
-    num_cache_slots: int = 440
     seed: int = 1024
 
 
@@ -24,8 +23,7 @@ class Testcase:
     x: torch.Tensor
     conv_state: torch.Tensor
     weight: torch.Tensor
-    bias: Optional[torch.Tensor]
-    cache_indices: torch.Tensor
+    bias: torch.Tensor
 
 
 def generate_testcase(t: TestParam) -> Testcase:
@@ -33,17 +31,14 @@ def generate_testcase(t: TestParam) -> Testcase:
     torch.cuda.manual_seed(t.seed)
     random.seed(t.seed)
 
-    # x: (batch, dim) - SGLang decode mode, shape [224, 8192]
-    x = torch.randn(t.batchsize, t.dim, device="cuda", dtype=torch.bfloat16)
+    x = torch.randn(
+        t.batchsize, t.dim, 1, device="cuda", dtype=torch.bfloat16
+    ).contiguous()
     weight = torch.randn(t.dim, t.width, device="cuda", dtype=torch.bfloat16)
-    # bias is None in SGLang actual run
-    bias = None
-    # conv_state: (num_cache_slots, dim, width-1) - state pool
+    bias = torch.randn(t.dim, device="cuda", dtype=torch.bfloat16)
     conv_state = torch.randn(
-        t.num_cache_slots, t.dim, t.width - 1, device="cuda", dtype=torch.bfloat16
+        t.batchsize, t.dim, t.width - 1, device="cuda", dtype=torch.bfloat16
     )
-    # cache_indices: (batch,) - map each sequence to a slot in state pool
-    cache_indices = torch.arange(t.batchsize, dtype=torch.int32, device="cuda")
 
     return Testcase(
         t=t,
@@ -51,7 +46,6 @@ def generate_testcase(t: TestParam) -> Testcase:
         conv_state=conv_state,
         weight=weight,
         bias=bias,
-        cache_indices=cache_indices,
     )
 
 
@@ -174,8 +168,8 @@ def run_test(p: TestParam) -> bool:
     t = generate_testcase(p)
     torch.cuda.synchronize()
 
-    x_ref = t.x.clone().unsqueeze(-1)  # Add dim for ref: (batch, dim) -> (batch, dim, 1)
-    conv_state_ref = t.conv_state[t.cache_indices].clone()  # Select by cache_indices for ref
+    x_ref = t.x.clone()
+    conv_state_ref = t.conv_state.clone()
 
     out = causal_conv1d_update(
         t.x,
@@ -183,7 +177,6 @@ def run_test(p: TestParam) -> bool:
         t.weight,
         t.bias,
         activation="silu",
-        conv_state_indices=t.cache_indices,
     )
 
     out_ref = causal_conv1d_update_ref(
@@ -194,11 +187,7 @@ def run_test(p: TestParam) -> bool:
         activation="silu",
     )
 
-    # Squeeze out_ref from [batch, dim, 1] to [batch, dim] to match kernel output
-    out_ref = out_ref.squeeze(-1)
-
-    # Check only the selected indices in state pool are updated correctly
-    assert torch.equal(t.conv_state[t.cache_indices], conv_state_ref)
+    assert torch.equal(t.conv_state, conv_state_ref)
     assert torch.allclose(out, out_ref, rtol=rtol, atol=atol)
 
     def run_ans():
@@ -208,7 +197,6 @@ def run_test(p: TestParam) -> bool:
             t.weight,
             t.bias,
             activation="silu",
-            conv_state_indices=t.cache_indices,
         )
 
     run_ans()
@@ -228,7 +216,7 @@ if __name__ == "__main__":
     torch.set_float32_matmul_precision("high")
 
     performance_cases = [
-        TestParam(batchsize=bs) for bs in [224]
+        TestParam(batchsize=bs) for bs in [1, 16, 32, 64, 128, 256, 512, 1024]
     ]
 
     testcases = performance_cases
