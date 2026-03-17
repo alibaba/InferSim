@@ -12,7 +12,7 @@ from sglang.srt.layers.attention.fla.fused_sigmoid_gating_recurrent import (
 
 @dataclasses.dataclass
 class TestParam:
-    bs: int = 256  # 序列数量（与 SGLang 的 num_prompts 对应）
+    bs: int = 256
     Hk: int = 16
     Hv: int = 32
     D: int = 128
@@ -30,7 +30,7 @@ class Testcase:
     cache_indices: torch.Tensor
     A_log: torch.Tensor
     dt_bias: torch.Tensor
-    cu_seqlens: torch.Tensor  # 新增：变长序列索引
+    cu_seqlens: torch.Tensor
 
 
 def generate_testcase(t: TestParam) -> Testcase:
@@ -40,17 +40,11 @@ def generate_testcase(t: TestParam) -> Testcase:
     random.seed(seed)
 
     device = "cuda"
-    
-    # === 关键修改：构造 cu_seqlens 匹配 SGLang decode 模式 ===
-    # 每个序列长度为 1（decode 阶段每个请求生成 1 个 token）
-    # cu_seqlens = [0, 1, 2, 3, ..., bs] 表示 bs 个长度为 1 的序列
+
     cu_seqlens = torch.arange(0, t.bs + 1, dtype=torch.int32, device=device)
-    
-    # 总 token 数 = bs（每个序列 1 个 token）
+
     total_tokens = t.bs
-    
-    # q, k: (B, T, H, K) = (1, total_tokens, Hk, D)
-    # 注意：B=1 是因为所有 token 被打包到一个 batch
+
     q = F.normalize(
         torch.randn((1, total_tokens, t.Hk, t.D), dtype=torch.bfloat16, device=device),
         dim=-1,
@@ -59,27 +53,21 @@ def generate_testcase(t: TestParam) -> Testcase:
         torch.randn((1, total_tokens, t.Hk, t.D), dtype=torch.bfloat16, device=device),
         dim=-1,
     )
-    # v: (B, T, HV, V) = (1, total_tokens, Hv, D)
     v = F.normalize(
         torch.randn((1, total_tokens, t.Hv, t.D), dtype=torch.bfloat16, device=device),
         dim=-1,
     )
-    
-    # a, b: (B*T, HV) = (total_tokens, Hv) when IS_KDA=False
+
     a = torch.randn((total_tokens, t.Hv), dtype=torch.bfloat16, device=device).sigmoid()
     b = torch.randn((total_tokens, t.Hv), dtype=torch.bfloat16, device=device).sigmoid()
-    
-    # ssm_states: (pool_size, HV, K, V)
-    # pool_size 需要足够大以容纳所有序列的状态
-    pool_size = t.bs  # 与 SGLang 一致
+
+    pool_size = t.bs
     initial_state = torch.randn(
         (pool_size, t.Hv, t.D, t.D), dtype=torch.float32, device=device
     )
-    
-    # cache_indices: 每个序列对应的状态索引
+
     cache_indices = torch.arange(t.bs, dtype=torch.int32, device=device)
     
-    # A_log, dt_bias: (HV,) = (Hv,)
     A_log = torch.randn(t.Hv, dtype=torch.float32, device=device)
     dt_bias = torch.randn(t.Hv, dtype=torch.bfloat16, device=device)
 
@@ -121,7 +109,7 @@ def run_test(p: TestParam) -> bool:
             initial_state_source=t.ssm_states,
             initial_state_indices=t.cache_indices,
             use_qk_l2norm_in_kernel=True,
-            cu_seqlens=t.cu_seqlens,  # 关键：传入 cu_seqlens
+            cu_seqlens=t.cu_seqlens,
             is_kda=False,
         )
 
@@ -141,7 +129,6 @@ if __name__ == "__main__":
     torch.cuda.set_device(device)
     torch.set_float32_matmul_precision("high")
 
-    # 测试与 SGLang 一致的 batch size
     performance_cases = [
         TestParam(bs=bs)
         for bs in [3, 6, 8, 16, 24, 32, 48, 64, 96, 128, 192, 224, 256, 384, 512]
