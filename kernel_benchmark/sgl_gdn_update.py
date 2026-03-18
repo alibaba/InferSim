@@ -114,10 +114,10 @@ def run_test(p: TestParam) -> bool:
 
     core_attn_out = run_gdn_update()
     torch.cuda.synchronize()
-    print(f"core_attn_out: {core_attn_out.shape}")
+    print(f"core_attn_out:{core_attn_out.shape}")
 
     ans_time: float = triton.testing.do_bench(run_gdn_update, warmup=10, rep=20) / 1000  # type: ignore
-    print(f"gdn_update: {ans_time * 1e6:4.0f} us")
+    print(f"gdn_update:{ans_time * 1e6:4.0f} us")
     return True
 
 
