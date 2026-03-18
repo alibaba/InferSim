@@ -5,11 +5,11 @@ import time
 import torch
 import torch.nn.functional as F
 import triton
-from sglang.srt.layers.attention.fla.chunk_delta_h import \
-    chunk_gated_delta_rule_fwd_h
+from sglang.srt.layers.attention.fla.chunk_delta_h import chunk_gated_delta_rule_fwd_h
 from sglang.srt.layers.attention.fla.chunk_o import chunk_fwd_o
-from sglang.srt.layers.attention.fla.chunk_scaled_dot_kkt import \
-    chunk_scaled_dot_kkt_fwd
+from sglang.srt.layers.attention.fla.chunk_scaled_dot_kkt import (
+    chunk_scaled_dot_kkt_fwd,
+)
 from sglang.srt.layers.attention.fla.cumsum import chunk_local_cumsum
 from sglang.srt.layers.attention.fla.solve_tril import solve_tril
 from sglang.srt.layers.attention.fla.wy_fast import recompute_w_u_fwd
