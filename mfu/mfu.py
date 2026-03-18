@@ -27,28 +27,9 @@ def get_attn_decode_mfu(config, target_bs, kv_len, device_type, use_fp8_kv):
                 continue
             rows.append(row)
 
-    mfu_bs = 1
-    for row in rows:
-        bs = int(row[2])
-        if bs <= target_bs:
-            mfu_bs = bs
-        else:
-            break
-
-    mfu_kv_len = 1
-    for row in rows:
-        kv_l = int(row[3])
-        if kv_l <= kv_len:
-            mfu_kv_len = kv_l
-        else:
-            break
-
-    mfu = gpu.mfu
-    for row in rows:
-        bs = int(row[2])
-        kv_l = int(row[3])
-        if bs == mfu_bs and kv_l == mfu_kv_len:
-            mfu = float(row[5])
+    # Find the row with closest batch_size and kv_len to target values
+    closest_row = min(rows, key=lambda r: abs(int(r[2]) - target_bs) + abs(int(r[3]) - kv_len))
+    mfu = float(closest_row[5])
 
     return round(mfu, 3)
 
