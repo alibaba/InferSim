@@ -5,9 +5,8 @@ import time
 import torch
 import torch.nn.functional as F
 import triton
-from sglang.srt.layers.attention.fla.fused_sigmoid_gating_recurrent import (
-    fused_sigmoid_gating_delta_rule_update,
-)
+from sglang.srt.layers.attention.fla.fused_sigmoid_gating_recurrent import \
+    fused_sigmoid_gating_delta_rule_update
 
 
 @dataclasses.dataclass
