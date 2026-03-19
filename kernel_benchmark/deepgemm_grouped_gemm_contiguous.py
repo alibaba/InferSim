@@ -170,8 +170,12 @@ def test_m_grouped_gemm_contiguous(num_groups, expected_m_per_group, k, n) -> No
 
 def main(args) -> None:
     print("Testing grouped contiguous GEMM:")
-    config = ModelConfig(args.config_path)
+    config = ModelConfig(args.config_path, tp_size=args.tp_size)
     results = []
+
+    # Use TP-aware dimensions
+    tp_hidden_size = config.hidden_size // args.tp_size
+    tp_intermediate_size = config.intermediate_size // args.tp_size
 
     for num_local_experts in range(config.num_routed_experts, 0, -1):
         if num_local_experts < 4:
@@ -179,7 +183,7 @@ def main(args) -> None:
         if config.num_routed_experts % num_local_experts > 0:
             continue
         world_size = config.num_routed_experts // num_local_experts
-        if world_size % 8 > 0 and (world_size not in [1, 4]):
+        if world_size % 8 > 0 and (world_size not in [1, 2, 4]):
             continue
         num_groups = num_local_experts
         for seq_len in [1024, 4096, 8192, 16384, 32768]:
@@ -191,14 +195,14 @@ def main(args) -> None:
             up_proj, up_tflops = test_m_grouped_gemm_contiguous(
                 num_groups,
                 expected_m_per_group,
-                config.hidden_size,
-                config.intermediate_size * 2,
+                tp_hidden_size,
+                tp_intermediate_size * 2,
             )
             down_proj, down_tflops = test_m_grouped_gemm_contiguous(
                 num_groups,
                 expected_m_per_group,
-                config.intermediate_size,
-                config.hidden_size,
+                tp_intermediate_size,
+                tp_hidden_size,
             )
             results.append(
                 {
@@ -208,6 +212,7 @@ def main(args) -> None:
                     "topk": config.num_experts_per_tok,
                     "hidden_size": config.hidden_size,
                     "intermediate_size": config.intermediate_size,
+                    "tp_size": args.tp_size,
                     "seq_len_per_gpu": seq_len,
                     "tokens_per_expert": expected_m_per_group,
                     "up_proj_us": round(up_proj, 6),
@@ -238,5 +243,6 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument("--gpu-tflops", type=int, default=296, help="GPU FP8 TFLOPS")
+    parser.add_argument("--tp-size", type=int, default=1, help="Tensor parallel size")
     args = parser.parse_args()
     main(args)

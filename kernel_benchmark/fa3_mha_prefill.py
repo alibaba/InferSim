@@ -107,11 +107,12 @@ def prefill_attention_fa3():
 
 
 def main(args):
-    config = ModelConfig(args.config_path)
-    fp16_tflops = 148
+    config = ModelConfig(args.config_path, tp_size=args.tp_size)
+    fp16_tflops = args.fp16_tflops
     head_dim = config.head_dim
-    num_q_heads = config.num_attention_heads
-    num_kv_heads = config.num_key_value_heads
+    # Use TP-aware head counts
+    num_q_heads = config.num_attention_heads // args.tp_size
+    num_kv_heads = config.num_key_value_heads // args.tp_size
     if num_q_heads == num_kv_heads:
         attn_type = "MHA"
     else:
@@ -128,7 +129,8 @@ def main(args):
         v = torch.randn(seq_len, num_kv_heads, head_dim, dtype=dtype, device="cuda")
 
         attn_core_gflops, other_gflops = get_mha_gflops(config, 1, seq_len)
-        attn_core_gflops = attn_core_gflops * seq_len / 2
+        # Adjust GFLOPs for TP
+        attn_core_gflops = attn_core_gflops * seq_len / 2 / args.tp_size
 
         us_fa3, _ = attn_fa3(q, k, v, num_q_heads, num_kv_heads, head_dim)
         mfu = attn_core_gflops * 1e3 / (fp16_tflops * us_fa3)
@@ -136,6 +138,8 @@ def main(args):
             attn_type,
             "  ",
             num_q_heads,
+            "  ",
+            num_kv_heads,
             "  ",
             head_dim,
             "  ",
@@ -149,6 +153,10 @@ def main(args):
         results.append(
             {
                 "dtype": "bf16",
+                "num_attention_heads": num_q_heads,
+                "num_key_value_heads": num_kv_heads,
+                "head_dim": head_dim,
+                "tp_size": args.tp_size,
                 "seq_len": seq_len,
                 "latency_us": round(us_fa3, 3),
                 "mfu": round(mfu, 3),
@@ -156,7 +164,9 @@ def main(args):
         )
 
     df = pd.DataFrame(results)
-    df.to_csv("attention_benchmark.csv", index=False)
+    output_file = f"attention_benchmark_tp{args.tp_size}.csv"
+    df.to_csv(output_file, index=False)
+    print(f"Results saved to {output_file}")
 
 
 if __name__ == "__main__":
@@ -167,6 +177,10 @@ if __name__ == "__main__":
         type=str,
         help="The path of the hf model config.json",
         required=True,
+    )
+    parser.add_argument("--tp-size", type=int, default=1, help="Tensor parallel size")
+    parser.add_argument(
+        "--fp16-tflops", type=int, default=148, help="GPU FP16 TFLOPS"
     )
 
     args = parser.parse_args()
