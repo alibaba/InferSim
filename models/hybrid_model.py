@@ -200,6 +200,13 @@ class HybridModel:
         print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_t1 * 1e6))
         print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_t2 * 1e6))
 
+        # TP all_reduce communication time
+        tp_comm_time = comm.tp_all_reduce(
+            self.args.max_prefill_tokens, self.config.tp_size
+        )
+        if self.config.tp_size > 1:
+            print("{:<40} {:<10.2f}".format("TP all_reduce (us):", tp_comm_time * 1e6))
+
         num_tokens = self.args.max_prefill_tokens
         ttft = (
             t_full_attn_core + t_full_attn_others
@@ -207,7 +214,7 @@ class HybridModel:
         ttft += (
             t_linear_attn_core + t_linear_attn_others
         ) * self.config.num_linear_attn_layers
-        ttft += (t_moe + comm_t1 + comm_t2) * self.config.num_hidden_layers
+        ttft += (t_moe + comm_t1 + comm_t2 + tp_comm_time) * self.config.num_hidden_layers
         ttft *= 1000  # convert to ms
         ttft += 30  # for scheduler
 
@@ -259,6 +266,11 @@ class HybridModel:
         print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_t1 * 1e6))
         print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_t2 * 1e6))
 
+        # TP all_reduce communication time
+        tp_comm_time = comm.tp_all_reduce(self.target_bs, self.config.tp_size)
+        if self.config.tp_size > 1:
+            print("{:<40} {:<10.2f}".format("TP all_reduce (us):", tp_comm_time * 1e6))
+
         num_tokens = self.target_bs
         tpot = (
             t_full_attn_core + t_full_attn_others
@@ -266,7 +278,7 @@ class HybridModel:
         tpot += (
             t_linear_attn_core + t_linear_attn_others
         ) * self.config.num_linear_attn_layers
-        tpot += (t_moe + comm_t1 + comm_t2) * self.config.num_hidden_layers
+        tpot += (t_moe + comm_t1 + comm_t2 + tp_comm_time) * self.config.num_hidden_layers
         tpot *= 1000  # convert to ms
         tpot += 2  # for scheduler
 

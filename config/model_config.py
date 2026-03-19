@@ -5,6 +5,7 @@ class ModelConfig:
     def __init__(
         self,
         config_path,
+        tp_size=1,
     ):
         d = dict()
         with open(config_path, "r") as f:
@@ -13,6 +14,7 @@ class ModelConfig:
         if d["model_type"] in ["qwen3_5", "qwen3_5_moe"]:
             d = d["text_config"]
 
+        self.tp_size = tp_size
         self.hidden_size = d["hidden_size"]
         self.num_hidden_layers = d["num_hidden_layers"]
 
@@ -52,6 +54,12 @@ class ModelConfig:
             self.index_topk = d.get("index_topk")
             self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim
 
+        # TP-aware dimensions
+        self.tp_hidden_size = self.hidden_size // self.tp_size
+        self.tp_num_attention_heads = self.num_attention_heads // self.tp_size
+        if self.attn_type == "MHA/GQA":
+            self.tp_num_key_value_heads = self.num_key_value_heads // self.tp_size
+
         # FFN/MoE
         self.is_moe = True
         if "num_routed_experts" in d:
@@ -70,3 +78,6 @@ class ModelConfig:
             self.num_experts_per_tok = 1
             self.intermediate_size = d["intermediate_size"]
             self.num_shared_experts = 0
+
+        # TP-aware intermediate size for MoE/FFN
+        self.tp_intermediate_size = self.intermediate_size // self.tp_size

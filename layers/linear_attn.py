@@ -32,6 +32,7 @@ class GDN:
         return max(t_attn_core / 1e6, t_states_load)
 
     def decode_attn_others(self, bs, device_type):
+        # Use TP-aware hidden_size
         key_dim = self.config.linear_num_key_heads * self.config.linear_key_head_dim
         value_dim = (
             self.config.linear_num_value_heads * self.config.linear_value_head_dim
@@ -40,7 +41,7 @@ class GDN:
         projection_size_ba = self.config.linear_num_value_heads * 2
         qkvz_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.hidden_size,
+            k=self.config.tp_hidden_size,
             n=projection_size_qkvz,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -55,7 +56,7 @@ class GDN:
         o_proj = get_gemm_mfu_and_latency(
             m=bs,
             k=self.config.linear_num_value_heads * self.config.linear_value_head_dim,
-            n=self.config.hidden_size,
+            n=self.config.tp_hidden_size,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
         )

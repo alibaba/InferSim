@@ -21,9 +21,10 @@ class MHA:
         self.config = config
 
     def get_attn_core_gflops(self, bs, kv_len):
+        # Use TP-aware dimensions
         attn_core = (
             gemm_flops(
-                bs, self.config.num_attention_heads * self.config.head_dim, kv_len
+                bs, self.config.tp_num_attention_heads * self.config.head_dim, kv_len
             )
             * 2
         )
@@ -58,10 +59,11 @@ class MHA:
         return max(attn_core_time, kv_load_time)
 
     def decode_attn_others(self, bs, device_type):
+        # Use TP-aware dimensions
         qkv_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.hidden_size,
-            n=(self.config.num_attention_heads + self.config.num_key_value_heads * 2)
+            k=self.config.tp_hidden_size,
+            n=(self.config.tp_num_attention_heads + self.config.tp_num_key_value_heads * 2)
             * self.config.head_dim,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -70,8 +72,8 @@ class MHA:
 
         o_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.head_dim,
-            n=self.config.hidden_size,
+            k=self.config.tp_num_attention_heads * self.config.head_dim,
+            n=self.config.tp_hidden_size,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
         )
@@ -164,9 +166,10 @@ class MLA(MHA):
         return max(attn_core_time, kv_load_time)
 
     def decode_attn_others(self, bs, device_type):
+        # Use TP-aware dimensions
         q_down_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.hidden_size,
+            k=self.config.tp_hidden_size,
             n=self.config.q_lora_rank,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -176,7 +179,7 @@ class MLA(MHA):
         q_up_proj = get_gemm_mfu_and_latency(
             m=bs,
             k=self.config.q_lora_rank,
-            n=self.config.num_attention_heads * self.config.qk_head_dim,
+            n=self.config.tp_num_attention_heads * self.config.qk_head_dim,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
         )
@@ -184,7 +187,7 @@ class MLA(MHA):
 
         kv_down_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.hidden_size,
+            k=self.config.tp_hidden_size,
             n=self.config.kv_lora_rank + self.config.qk_rope_head_dim,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -195,7 +198,7 @@ class MLA(MHA):
 
         bmm_q_wk = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.qk_nope_head_dim,
+            k=self.config.tp_num_attention_heads * self.config.qk_nope_head_dim,
             n=self.config.kv_lora_rank,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -204,7 +207,7 @@ class MLA(MHA):
 
         bmm_o_wv = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.kv_lora_rank,
+            k=self.config.tp_num_attention_heads * self.config.kv_lora_rank,
             n=self.config.v_head_dim,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -213,8 +216,8 @@ class MLA(MHA):
 
         o_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.v_head_dim,
-            n=self.config.hidden_size,
+            k=self.config.tp_num_attention_heads * self.config.v_head_dim,
+            n=self.config.tp_hidden_size,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
         )

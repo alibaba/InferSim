@@ -156,6 +156,13 @@ class Model:
         print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_time1 * 1e6))
         print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_time2 * 1e6))
 
+        # TP all_reduce communication time
+        tp_comm_time = comm.tp_all_reduce(
+            self.args.max_prefill_tokens, self.config.tp_size
+        )
+        if self.config.tp_size > 1:
+            print("{:<40} {:<10.2f}".format("TP all_reduce (us):", tp_comm_time * 1e6))
+
         num_tokens = self.args.max_prefill_tokens
         if self.args.enable_tbo:
             num_tokens *= 2
@@ -172,6 +179,7 @@ class Model:
             ttft += moe_time
             ttft += attn_other_time
             ttft += comm_time1 + comm_time2
+            ttft += tp_comm_time  # Add TP communication time
         ttft *= self.config.num_hidden_layers
         ttft *= 1000  # convert to ms
         ttft += 30  # for scheduler
@@ -212,6 +220,11 @@ class Model:
         print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_time1 * 1e6))
         print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_time2 * 1e6))
 
+        # TP all_reduce communication time
+        tp_comm_time = comm.tp_all_reduce(self.target_bs, self.config.tp_size)
+        if self.config.tp_size > 1:
+            print("{:<40} {:<10.2f}".format("TP all_reduce (us):", tp_comm_time * 1e6))
+
         num_tokens = self.target_bs
         if self.args.enable_tbo:
             num_tokens *= 2
@@ -224,6 +237,7 @@ class Model:
             tpot += attn_other_time
             tpot += moe_time
             tpot += comm_time1 + comm_time2
+            tpot += tp_comm_time  # Add TP communication time
         tpot *= self.config.num_hidden_layers
         tpot *= 1000  # convert to ms
         tpot += 5  # for scheduler

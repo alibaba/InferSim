@@ -2,8 +2,9 @@ from config.model_config import ModelConfig
 
 
 def get_mha_kvcache_size(config: ModelConfig, use_fp8):
+    # Use TP-aware num_key_value_heads
     kvcache_size = (
-        2 * config.num_hidden_layers * config.num_key_value_heads * config.head_dim
+        2 * config.num_hidden_layers * config.tp_num_key_value_heads * config.head_dim
     )
     if not use_fp8:
         kvcache_size *= 2
