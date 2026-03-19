@@ -68,6 +68,10 @@ def decode_attention_flashinfer(kv_cache_dtype, num_attention_heads, num_kv_head
             head_dim,
             q_type,
             kv_type,
+            sm_scale=None,
+            logits_soft_cap=0.0,
+            k_scale=None,
+            v_scale=None,
             warmup=10,
         ):
             total_tokens = batch_size * kv_len
@@ -93,13 +97,22 @@ def decode_attention_flashinfer(kv_cache_dtype, num_attention_heads, num_kv_head
 
             for _ in range(warmup):
                 o = flashinfer_decode_wrapper.forward(
-                    q.contiguous().view(-1, num_attention_heads, head_dim), kv_data
+                    q.contiguous().view(-1, num_attention_heads, head_dim),
+                    kv_data,
+                    sm_scale=sm_scale,
+                    logits_soft_cap=logits_soft_cap,
+                    k_scale=k_scale,
+                    v_scale=v_scale,
                 )
 
             f = time_fwd(
                 flashinfer_decode_wrapper.forward,
                 q.contiguous().view(-1, num_attention_heads, head_dim),
                 kv_data,
+                sm_scale=sm_scale,
+                logits_soft_cap=logits_soft_cap,
+                k_scale=k_scale,
+                v_scale=v_scale,
             )
 
             return f, o
@@ -164,6 +177,7 @@ def main(args):
         attn_core_gflops, other_gflops = get_mha_gflops(config, 1, kv_len)
         attn_core_gflops = attn_core_gflops * batch_size / args.tp_size
 
+        sm_scale = 1.0 / (head_dim ** 0.5)
         us_flashinfer, _ = attn_flashinfer(
             q,
             kv_data,
@@ -174,6 +188,10 @@ def main(args):
             head_dim,
             dtype,
             kv_cache_dtype,
+            sm_scale,
+            0.0,
+            None,
+            None,
         )
         mfu = attn_core_gflops * 1e3 / (fp16_tflops * us_flashinfer)
         print(

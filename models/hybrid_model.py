@@ -268,7 +268,7 @@ class HybridModel:
         ) * self.config.num_linear_attn_layers
         tpot += (t_moe + comm_t1 + comm_t2) * self.config.num_hidden_layers
         tpot *= 1000  # convert to ms
-        tpot += 5  # for scheduler
+        tpot += 2  # for scheduler
 
         print("{:<40} {:<10.2f}".format("TPOT (ms):", tpot))
         print("{:<40} {:<10.0f}".format("Throughput (TGS):", num_tokens / tpot * 1000))

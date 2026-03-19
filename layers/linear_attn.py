@@ -11,7 +11,7 @@ class GDN:
 
     def decode_attn_core(self, bs, states_bytes, device_type):
         gpu = gpu_map[device_type]
-        t_attn_core = get_linear_attn_decode_latency(self.config, bs, device_type)
+        t_attn_core = get_linear_attn_decode_latency(self.config, bs, device_type) * 0.9
         t_states_load = (
             states_bytes
             * bs
