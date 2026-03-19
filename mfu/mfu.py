@@ -8,10 +8,10 @@ def get_attn_decode_mfu(config, target_bs, kv_len, device_type, use_fp8_kv):
     gpu = gpu_map[device_type]
     if config.attn_type == "MHA/GQA":
         head_dim = config.head_dim
-        file_name = f"bench_data/mha/decode/{device_type.lower()}/{config.num_attention_heads}-{config.num_key_value_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mha/decode/{device_type.lower()}/{config.tp_num_attention_heads}-{config.tp_num_key_value_heads}-{head_dim}.csv"
     elif config.attn_type == "MLA":
         head_dim = f"{config.kv_lora_rank}-{config.qk_rope_head_dim}"
-        file_name = f"bench_data/mla/decode/{device_type.lower()}/{config.num_attention_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mla/decode/{device_type.lower()}/{config.tp_num_attention_heads}-{head_dim}.csv"
     if not os.path.exists(file_name):
         print(f"Warning: {file_name} not exists")
         return gpu.mfu
@@ -38,10 +38,10 @@ def get_attn_prefill_mfu(config, seq_len, device_type):
     gpu = gpu_map[device_type]
     if config.attn_type == "MHA/GQA":
         head_dim = config.head_dim
-        file_name = f"bench_data/mha/prefill/{device_type.lower()}/{config.num_attention_heads}-{config.num_key_value_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mha/prefill/{device_type.lower()}/{config.tp_num_attention_heads}-{config.tp_num_key_value_heads}-{head_dim}.csv"
     elif config.attn_type == "MLA":
         head_dim = f"{config.qk_nope_head_dim}-{config.qk_rope_head_dim}"
-        file_name = f"bench_data/mla/prefill/{device_type.lower()}/{config.num_attention_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mla/prefill/{device_type.lower()}/{config.tp_num_attention_heads}-{head_dim}.csv"
     if not os.path.exists(file_name):
         print(f"Warning: {file_name} not exist.")
         return 0.9
