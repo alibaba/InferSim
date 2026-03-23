@@ -113,6 +113,19 @@ def benchmark(
             "use_fp8_w8a8": use_fp8_w8a8,
             "block_shape": block_shape,
         }
+        if use_fp8_w8a8:
+            # Add dummy scales for FP8 mode
+            num_experts_per_gpu = num_experts
+            shard_intermediate_size_fp8 = shard_intermediate_size // block_shape[0]
+            hidden_size_fp8 = hidden_size // block_shape[0]
+            w1_scale = torch.randn(num_experts_per_gpu, shard_intermediate_size_fp8 * 2, hidden_size_fp8, dtype=torch.float32, device="cuda")
+            w2_scale = torch.randn(num_experts_per_gpu, hidden_size_fp8, shard_intermediate_size_fp8, dtype=torch.float32, device="cuda")
+            a1_scale = torch.randn(1, dtype=torch.float32, device="cuda")
+            a2_scale = torch.randn(1, dtype=torch.float32, device="cuda")
+            api_kwargs["w1_scale"] = w1_scale
+            api_kwargs["w2_scale"] = w2_scale
+            api_kwargs["a1_scale"] = a1_scale
+            api_kwargs["a2_scale"] = a2_scale
 
     # Warmup
     for _ in range(10):
