@@ -221,7 +221,7 @@ class HybridModel:
         print("{:<40} {:<10.2f}".format("TTFT (ms):", ttft))
         print(
             "{:<40} {:<10.0f}".format(
-                "Throughput (TGS:tok/GPU/s):", num_tokens / (ttft / 1000)
+                "Throughput (TGS:tok/GPU/s):", num_tokens / self.config.tp_size / (ttft / 1000)
             )
         )
 

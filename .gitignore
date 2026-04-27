@@ -1,2 +1,4 @@
 __pycache__/
 *.un~
+.qoder/
+.DS_store
