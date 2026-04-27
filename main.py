@@ -1,4 +1,15 @@
 import argparse
+import sys
+from pathlib import Path
+
+# 避免 user site-packages 中的同名包（如 jupyter 的 comm）遮挡项目目录下的隐式命名空间包
+project_root = str(Path(__file__).parent.resolve())
+for p in list(sys.path):
+    if p.endswith("site-packages") and "Library/Python" in p:
+        sys.path.remove(p)
+if project_root in sys.path:
+    sys.path.remove(project_root)
+sys.path.insert(0, project_root)
 
 from config.model_config import ModelConfig
 from models.hybrid_model import HybridModel
