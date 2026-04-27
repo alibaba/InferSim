@@ -130,7 +130,7 @@ def main(args):
 
         attn_core_gflops, other_gflops = get_mha_gflops(config, 1, seq_len)
         # Adjust GFLOPs for TP
-        attn_core_gflops = attn_core_gflops * seq_len / 2 / args.tp_size
+        attn_core_gflops = attn_core_gflops * seq_len / 2
 
         us_fa3, _ = attn_fa3(q, k, v, num_q_heads, num_kv_heads, head_dim)
         mfu = attn_core_gflops * 1e3 / (fp16_tflops * us_fa3)
