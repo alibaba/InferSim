@@ -178,6 +178,7 @@ if __name__ == "__main__":
         help="The path of the hf model config.json",
         required=True,
     )
+    # Tensor Parallel size
     parser.add_argument("--tp-size", type=int, default=1, help="Tensor parallel size")
     parser.add_argument(
         "--fp16-tflops", type=int, default=148, help="GPU FP16 TFLOPS"
