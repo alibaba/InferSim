@@ -31,9 +31,10 @@ class Model:
                 "One expert params size (MB):", expert_params_bytes / 1024 / 1024
             )
         )
+        ep_size = self.args.world_size // self.config.tp_size
         params_per_gpu = attn_params_bytes + expert_params_bytes * (
             self.config.num_shared_experts
-            + self.config.num_routed_experts / self.args.world_size
+            + self.config.num_routed_experts / ep_size
         )
         params_per_gpu = params_per_gpu / 1024 / 1024 / 1024
         params_per_gpu *= self.config.num_hidden_layers

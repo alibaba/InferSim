@@ -67,7 +67,7 @@ def get_attn_prefill_mfu(config, seq_len, device_type):
     return round(mfu, 3)
 
 
-def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8):
+def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8, tp_size=1):
     gpu = gpu_map[device_type]
     file_name = f"bench_data/grouped_gemm/decode/{device_type.lower()}/data.csv"
     if not os.path.exists(file_name):
@@ -75,6 +75,8 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
         return gpu.mfu, gpu.mfu
 
     # row: num_experts,num_gpus,num_local_experts,topk,hidden_size,intermediate_size,batch_size_per_gpu,tokens_per_expert,up_proj_us,up_mfu,down_proj_us,down_mfu
+    ep_size = num_gpus // tp_size
+    expected_num_local_experts = config.num_routed_experts // ep_size
     rows = list()
     with open(file_name, "r") as f:
         reader = csv.reader(f)
@@ -83,6 +85,8 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
             if int(row[0]) != config.num_routed_experts:
                 continue
             if int(row[1]) != num_gpus:
+                continue
+            if int(row[2]) != expected_num_local_experts:
                 continue
             if int(row[3]) != config.num_experts_per_tok:
                 continue
@@ -102,7 +106,7 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
 
     return round(mfu1, 3), round(mfu2, 3)
 
-def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8):
+def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8, tp_size=1):
     gpu = gpu_map[device_type]
     file_name = f"bench_data/grouped_gemm/prefill/{device_type.lower()}/data.csv"
     if not os.path.exists(file_name):
@@ -110,6 +114,8 @@ def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8)
         return gpu.mfu, gpu.mfu
 
     # row: num_experts,num_gpus,num_local_experts,topk,hidden_size,intermediate_size,seq_len_per_gpu,tokens_per_expert,up_proj_us,up_mfu,down_proj_us,down_mfu
+    ep_size = num_gpus // tp_size
+    expected_num_local_experts = config.num_routed_experts // ep_size
     rows = list()
     with open(file_name, "r") as f:
         reader = csv.reader(f)
@@ -118,6 +124,8 @@ def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8)
             if int(row[0]) != config.num_routed_experts:
                 continue
             if int(row[1]) != num_gpus:
+                continue
+            if int(row[2]) != expected_num_local_experts:
                 continue
             if int(row[3]) != config.num_experts_per_tok:
                 continue

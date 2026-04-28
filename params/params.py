@@ -74,8 +74,8 @@ def get_linear_attn_params_size(config: ModelConfig, use_fp8: bool):
 
 
 def get_expert_params_size(config: ModelConfig, use_fp8: bool):
-    # Use TP-aware dimensions for expert params
-    w = 3 * config.tp_hidden_size * config.tp_intermediate_size
+    # Use original hidden_size and TP-divided intermediate_size for expert params
+    w = 3 * config.hidden_size * config.tp_intermediate_size
     if not use_fp8:
         w *= 2
     return w
@@ -86,7 +86,8 @@ def load_attn_weights_time(config: ModelConfig, use_fp8: bool, gpu: GPU):
     return size / 1024 / 1024 / 1024 / gpu.mem_bw
 
 
-def load_moe_weights_time(config: ModelConfig, use_fp8: bool, gpu: GPU, num_gpus):
+def load_moe_weights_time(config: ModelConfig, use_fp8: bool, gpu: GPU, num_gpus, tp_size=1):
     size = get_expert_params_size(config, use_fp8)
-    size *= config.num_routed_experts / num_gpus
+    ep_size = num_gpus // tp_size
+    size *= config.num_routed_experts / ep_size
     return size / 1024 / 1024 / 1024 / gpu.mem_bw

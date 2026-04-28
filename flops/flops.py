@@ -146,6 +146,6 @@ def get_attn_gflops(config: ModelConfig, avg_context_len: int, absorb=True):
 
 
 def get_moe_gflops(config: ModelConfig):
-    # Use TP-aware dimensions
+    # Use original hidden_size and TP-divided intermediate_size
     act = config.num_shared_experts + config.num_experts_per_tok
-    return act * 3.0 * gemm_flops(1, config.tp_hidden_size, config.tp_intermediate_size) / 1e9
+    return act * 3.0 * gemm_flops(1, config.hidden_size, config.tp_intermediate_size) / 1e9

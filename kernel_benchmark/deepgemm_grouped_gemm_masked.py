@@ -148,12 +148,15 @@ def main(args) -> None:
     config = ModelConfig(args.config_path, tp_size=args.tp_size)
     results = []
 
-    # Use TP-aware dimensions
-    tp_hidden_size = config.hidden_size // args.tp_size
+    # Use original hidden_size, but TP-divided intermediate_size
+    tp_hidden_size = config.hidden_size
     tp_intermediate_size = config.intermediate_size // args.tp_size
 
     for world_size in [1, 2, 4, 8]:
-        num_local_experts = config.num_routed_experts // world_size
+        if world_size % args.tp_size != 0:
+            continue
+        ep_size = world_size // args.tp_size
+        num_local_experts = config.num_routed_experts // ep_size
         num_groups = num_local_experts
         for bs in [8, 16, 32, 64, 128, 256, 512, 1024]:
             expected_m_per_group = round(bs * config.num_experts_per_tok / num_groups)

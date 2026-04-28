@@ -18,16 +18,16 @@ class MoE:
     def decode_moe(self, bs, device_type, num_gpus):
         gpu = gpu_map[device_type]
 
-        # Use TP-aware intermediate_size
+        # Use original hidden_size and TP-divided intermediate_size
         routed_experts_gflops = gemm_flops(
-            1, self.config.tp_hidden_size, self.config.tp_intermediate_size
+            1, self.config.hidden_size, self.config.tp_intermediate_size
         )
         routed_experts_gflops *= bs * self.config.num_experts_per_tok * 3.0 / 1e9
 
         if self.config.is_moe:
             routed_experts_mfu = max(
                 get_groupedgemm_decode_mfu(
-                    self.config, bs, device_type, num_gpus, self.use_fp8_gemm
+                    self.config, bs, device_type, num_gpus, self.use_fp8_gemm, self.config.tp_size
                 )
             )
         else:  # Dense FFN is treated as a special 1-expert MoE
@@ -47,7 +47,7 @@ class MoE:
             )
 
         moe_load_time = load_moe_weights_time(
-            self.config, self.use_fp8_gemm, gpu, num_gpus
+            self.config, self.use_fp8_gemm, gpu, num_gpus, self.config.tp_size
         )
         print("{:<40} {:<10.2f}".format("Routed experts/FFN MFU:", routed_experts_mfu))
         print(
@@ -63,10 +63,10 @@ class MoE:
         t = max(routed_experts_latency, moe_load_time)
 
         if self.config.num_shared_experts > 0:
-            # Use TP-aware dimensions for shared experts
+            # Use original hidden_size and TP-divided intermediate_size for shared experts
             shared_expert_up_proj = get_gemm_mfu_and_latency(
                 m=bs,
-                k=self.config.tp_hidden_size,
+                k=self.config.hidden_size,
                 n=self.config.tp_intermediate_size * 2 * self.config.num_shared_experts,
                 device_type=device_type,
                 use_fp8_gemm=self.use_fp8_gemm,
@@ -75,7 +75,7 @@ class MoE:
             shared_expert_down_proj = get_gemm_mfu_and_latency(
                 m=bs,
                 k=self.config.tp_intermediate_size * self.config.num_shared_experts,
-                n=self.config.tp_hidden_size,
+                n=self.config.hidden_size,
                 device_type=device_type,
                 use_fp8_gemm=self.use_fp8_gemm,
             )
@@ -91,16 +91,16 @@ class MoE:
     def prefill_moe(self, seq_len, device_type, num_gpus):
         gpu = gpu_map[device_type]
 
-        # Use TP-aware intermediate_size
+        # Use original hidden_size and TP-divided intermediate_size
         routed_experts_gflops = gemm_flops(
-            1, self.config.tp_hidden_size, self.config.tp_intermediate_size
+            1, self.config.hidden_size, self.config.tp_intermediate_size
         )
         routed_experts_gflops *= seq_len * self.config.num_experts_per_tok * 3.0 / 1e9
 
         if self.config.is_moe:
             routed_experts_mfu = max(
                 get_groupedgemm_prefill_mfu(
-                    self.config, seq_len, device_type, num_gpus, self.use_fp8_gemm
+                    self.config, seq_len, device_type, num_gpus, self.use_fp8_gemm, self.config.tp_size
                 )
             )
         else:  # Dense FFN is treated as a special 1-expert MoE
@@ -120,7 +120,7 @@ class MoE:
             )
 
         moe_load_time = load_moe_weights_time(
-            self.config, self.use_fp8_gemm, gpu, num_gpus
+            self.config, self.use_fp8_gemm, gpu, num_gpus, self.config.tp_size
         )
         print("{:<40} {:<10.2f}".format("Routed experts MFU:", routed_experts_mfu))
         print(
@@ -136,10 +136,10 @@ class MoE:
         t = max(routed_experts_latency, moe_load_time)
 
         if self.config.num_shared_experts > 0:
-            # Use TP-aware dimensions for shared experts
+            # Use original hidden_size and TP-divided intermediate_size for shared experts
             shared_expert_up_proj = get_gemm_mfu_and_latency(
                 m=seq_len,
-                k=self.config.tp_hidden_size,
+                k=self.config.hidden_size,
                 n=self.config.tp_intermediate_size * 2 * self.config.num_shared_experts,
                 device_type=device_type,
                 use_fp8_gemm=self.use_fp8_gemm,
@@ -148,7 +148,7 @@ class MoE:
             shared_expert_down_proj = get_gemm_mfu_and_latency(
                 m=seq_len,
                 k=self.config.tp_intermediate_size * self.config.num_shared_experts,
-                n=self.config.tp_hidden_size,
+                n=self.config.hidden_size,
                 device_type=device_type,
                 use_fp8_gemm=self.use_fp8_gemm,
             )

@@ -173,17 +173,18 @@ def main(args) -> None:
     config = ModelConfig(args.config_path, tp_size=args.tp_size)
     results = []
 
-    # Use TP-aware dimensions
-    tp_hidden_size = config.hidden_size // args.tp_size
+    # Use original hidden_size, but TP-divided intermediate_size
+    tp_hidden_size = config.hidden_size
     tp_intermediate_size = config.intermediate_size // args.tp_size
 
-    for num_local_experts in range(config.num_routed_experts, 0, -1):
-        if num_local_experts < 4:
-            break
-        if config.num_routed_experts % num_local_experts > 0:
+    for world_size in [1, 2, 4, 8]:
+        if world_size % args.tp_size != 0:
             continue
-        world_size = config.num_routed_experts // num_local_experts
-        if world_size % 8 > 0 and (world_size not in [1, 2, 4]):
+        ep_size = world_size // args.tp_size
+        num_local_experts = config.num_routed_experts // ep_size
+        if num_local_experts < 4:
+            continue
+        if config.num_routed_experts % num_local_experts > 0:
             continue
         num_groups = num_local_experts
         for seq_len in [1024, 4096, 8192, 16384, 32768]:
