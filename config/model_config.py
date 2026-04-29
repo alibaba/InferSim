@@ -55,7 +55,7 @@ class ModelConfig:
             self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim
 
         # TP-aware dimensions
-        self.tp_hidden_size = self.hidden_size // self.tp_size
+        self.tp_hidden_size = self.hidden_size
         self.tp_num_attention_heads = self.num_attention_heads // self.tp_size
         if self.attn_type == "MHA/GQA":
             self.tp_num_key_value_heads = self.num_key_value_heads // self.tp_size
