@@ -161,8 +161,8 @@ def main(args) -> None:
         for bs in [8, 16, 32, 64, 128, 256, 512, 1024]:
             expected_m_per_group = round(bs * config.num_experts_per_tok / num_groups)
             print(f"expected_m_per_group: {expected_m_per_group}")
-            if expected_m_per_group < 16:
-                continue
+            #if expected_m_per_group < 16:
+            #    continue
             up_proj, up_tflops = test_m_grouped_gemm_masked(
                 num_groups,
                 expected_m_per_group,
