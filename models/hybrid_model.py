@@ -283,6 +283,6 @@ class HybridModel:
         tpot += 2  # for scheduler
 
         print("{:<40} {:<10.2f}".format("TPOT (ms):", tpot))
-        print("{:<40} {:<10.0f}".format("Throughput (TGS):", num_tokens / tpot * 1000))
+        print("{:<40} {:<10.0f}".format("Throughput (TGS:tok/GPU/s):", num_tokens / self.config.tp_size / (tpot / 1000)))
         if tpot > self.args.target_tpot:
             print("!Error: TPOT > SLO, need smaller GFLOPs to speedup")
