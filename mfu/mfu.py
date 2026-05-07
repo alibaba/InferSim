@@ -4,14 +4,16 @@ import os
 from hardware.gpu import gpu_map
 
 
-def get_attn_decode_mfu(config, target_bs, kv_len, device_type, use_fp8_kv):
+def get_attn_decode_mfu(config, target_bs, kv_len, device_type, use_fp8_kv, tp_size):
     gpu = gpu_map[device_type]
+    tp_num_heads = config.num_attention_heads // tp_size
     if config.attn_type == "MHA/GQA":
+        tp_num_kv_heads = config.num_key_value_heads // tp_size
         head_dim = config.head_dim
-        file_name = f"bench_data/mha/decode/{device_type.lower()}/{config.num_attention_heads}-{config.num_key_value_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mha/decode/{device_type.lower()}/{tp_num_heads}-{tp_num_kv_heads}-{head_dim}.csv"
     elif config.attn_type == "MLA":
         head_dim = f"{config.kv_lora_rank}-{config.qk_rope_head_dim}"
-        file_name = f"bench_data/mla/decode/{device_type.lower()}/{config.num_attention_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mla/decode/{device_type.lower()}/{tp_num_heads}-{head_dim}.csv"
     if not os.path.exists(file_name):
         print(f"Warning: {file_name} not exists")
         return gpu.mfu
@@ -27,40 +29,23 @@ def get_attn_decode_mfu(config, target_bs, kv_len, device_type, use_fp8_kv):
                 continue
             rows.append(row)
 
-    mfu_bs = 1
-    for row in rows:
-        bs = int(row[2])
-        if bs <= target_bs:
-            mfu_bs = bs
-        else:
-            break
-
-    mfu_kv_len = 1
-    for row in rows:
-        kv_l = int(row[3])
-        if kv_l <= kv_len:
-            mfu_kv_len = kv_l
-        else:
-            break
-
-    mfu = gpu.mfu
-    for row in rows:
-        bs = int(row[2])
-        kv_l = int(row[3])
-        if bs == mfu_bs and kv_l == mfu_kv_len:
-            mfu = float(row[5])
+    # Find the row with closest batch_size and kv_len to target values
+    closest_row = min(rows, key=lambda r: abs(int(r[2]) - target_bs) + abs(int(r[3]) - kv_len))
+    mfu = float(closest_row[5])
 
     return round(mfu, 3)
 
 
-def get_attn_prefill_mfu(config, seq_len, device_type):
+def get_attn_prefill_mfu(config, seq_len, device_type, tp_size):
     gpu = gpu_map[device_type]
+    tp_num_heads = config.num_attention_heads // tp_size
     if config.attn_type == "MHA/GQA":
+        tp_num_kv_heads = config.num_key_value_heads // tp_size
         head_dim = config.head_dim
-        file_name = f"bench_data/mha/prefill/{device_type.lower()}/{config.num_attention_heads}-{config.num_key_value_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mha/prefill/{device_type.lower()}/{tp_num_heads}-{tp_num_kv_heads}-{head_dim}.csv"
     elif config.attn_type == "MLA":
         head_dim = f"{config.qk_nope_head_dim}-{config.qk_rope_head_dim}"
-        file_name = f"bench_data/mla/prefill/{device_type.lower()}/{config.num_attention_heads}-{head_dim}.csv"
+        file_name = f"bench_data/mla/prefill/{device_type.lower()}/{tp_num_heads}-{head_dim}.csv"
     if not os.path.exists(file_name):
         print(f"Warning: {file_name} not exist.")
         return 0.9
@@ -86,7 +71,7 @@ def get_attn_prefill_mfu(config, seq_len, device_type):
     return round(mfu, 3)
 
 
-def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8):
+def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8, tp_size=1):
     gpu = gpu_map[device_type]
     file_name = f"bench_data/grouped_gemm/decode/{device_type.lower()}/data.csv"
     if not os.path.exists(file_name):
@@ -94,6 +79,8 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
         return gpu.mfu, gpu.mfu
 
     # row: num_experts,num_gpus,num_local_experts,topk,hidden_size,intermediate_size,batch_size_per_gpu,tokens_per_expert,up_proj_us,up_mfu,down_proj_us,down_mfu
+    ep_size = num_gpus // tp_size
+    expected_num_local_experts = config.num_routed_experts // ep_size
     rows = list()
     with open(file_name, "r") as f:
         reader = csv.reader(f)
@@ -103,11 +90,13 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
                 continue
             if int(row[1]) != num_gpus:
                 continue
+            if int(row[2]) != expected_num_local_experts:
+                continue
             if int(row[3]) != config.num_experts_per_tok:
                 continue
             if int(row[4]) != config.hidden_size:
                 continue
-            if int(row[5]) != config.intermediate_size:
+            if int(row[5]) != config.intermediate_size // tp_size:
                 continue
             rows.append(row)
 
@@ -121,7 +110,7 @@ def get_groupedgemm_decode_mfu(config, target_bs, device_type, num_gpus, use_fp8
 
     return round(mfu1, 3), round(mfu2, 3)
 
-def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8):
+def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8, tp_size=1):
     gpu = gpu_map[device_type]
     file_name = f"bench_data/grouped_gemm/prefill/{device_type.lower()}/data.csv"
     if not os.path.exists(file_name):
@@ -129,6 +118,8 @@ def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8)
         return gpu.mfu, gpu.mfu
 
     # row: num_experts,num_gpus,num_local_experts,topk,hidden_size,intermediate_size,seq_len_per_gpu,tokens_per_expert,up_proj_us,up_mfu,down_proj_us,down_mfu
+    ep_size = num_gpus // tp_size
+    expected_num_local_experts = config.num_routed_experts // ep_size
     rows = list()
     with open(file_name, "r") as f:
         reader = csv.reader(f)
@@ -138,11 +129,13 @@ def get_groupedgemm_prefill_mfu(config, seq_len, device_type, num_gpus, use_fp8)
                 continue
             if int(row[1]) != num_gpus:
                 continue
+            if int(row[2]) != expected_num_local_experts:
+                continue
             if int(row[3]) != config.num_experts_per_tok:
                 continue
             if int(row[4]) != config.hidden_size:
                 continue
-            if int(row[5]) != config.intermediate_size:
+            if int(row[5]) != config.intermediate_size // tp_size:
                 continue
             rows.append(row)
 

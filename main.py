@@ -11,6 +11,7 @@ def main(args):
     print("\n{s:{c}^{n}}".format(s=" Simulator Result ", n=50, c="="))
     print("{:<40} {:<10}".format("Device type:", args.device_type))
     print("{:<40} {:<10}".format("World size:", args.world_size))
+    print("{:<40} {:<10}".format("TP size:", args.tp_size))
     print("{:<40} {:<10}".format("Attn type:", config.attn_type))
     print("{:<40} {:<10}".format("Use FP8 GEMM:", args.use_fp8_gemm))
     print("{:<40} {:<10}".format("Use FP8 KV:", args.use_fp8_kv))
@@ -47,6 +48,12 @@ if __name__ == "__main__":
         help="Device type",
     )
     parser.add_argument("--world-size", type=int, default=1, help="Num of GPUs")
+    parser.add_argument(
+        "--tp-size",
+        type=int,
+        default=1,
+        help="Tensor parallel size. If >1, both attention and MoE use TP; if =1, attention uses DP and MoE uses EP.",
+    )
     parser.add_argument("--num-nodes", type=int, default=1, help="Num of nodes")
     parser.add_argument(
         "--max-prefill-tokens",

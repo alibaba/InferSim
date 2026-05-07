@@ -17,9 +17,12 @@ class Model:
 
     def print_weights_info(self):
         print("{s:{c}^{n}}".format(s="Model Weights", n=50, c="-"))
-        attn_params_bytes = get_attn_params_size(self.config, self.args.use_fp8_gemm)
+        tp_size = self.args.tp_size
+        attn_params_bytes = get_attn_params_size(
+            self.config, self.args.use_fp8_gemm, tp_size
+        )
         expert_params_bytes = get_expert_params_size(
-            self.config, self.args.use_fp8_gemm
+            self.config, self.args.use_fp8_gemm, tp_size
         )
         print(
             "{:<40} {:<10.2f}".format(
@@ -31,10 +34,20 @@ class Model:
                 "One expert params size (MB):", expert_params_bytes / 1024 / 1024
             )
         )
-        params_per_gpu = attn_params_bytes + expert_params_bytes * (
-            self.config.num_shared_experts
-            + self.config.num_routed_experts / self.args.world_size
-        )
+        # Unified split rule:
+        #   tp_size == 1 -> attn is DP (full), MoE routed experts split by EP (= world_size)
+        #   tp_size >  1 -> attn and MoE both split by TP only (no EP/world_size division)
+        if tp_size == 1:
+            ep_size = self.args.world_size
+            experts_on_gpu = (
+                self.config.num_shared_experts
+                + self.config.num_routed_experts / ep_size
+            )
+        else:
+            experts_on_gpu = (
+                self.config.num_shared_experts + self.config.num_routed_experts
+            )
+        params_per_gpu = attn_params_bytes + expert_params_bytes * experts_on_gpu
         params_per_gpu = params_per_gpu / 1024 / 1024 / 1024
         params_per_gpu *= self.config.num_hidden_layers
         self.kvcache_mem = (
@@ -57,7 +70,9 @@ class Model:
         target_kvcache_bytes = (
             self.kvcache_mem * 1024 * 1024 * 1024 / target_bs / context_len
         )
-        kvcache_bytes = get_kvcache_size(self.config, self.args.use_fp8_kv)
+        kvcache_bytes = get_kvcache_size(
+            self.config, self.args.use_fp8_kv, self.args.tp_size
+        )
         print(
             "{:<40} {:<10.2f}".format(
                 "Target per-token KV cache size (KB):", target_kvcache_bytes / 1024
@@ -81,9 +96,9 @@ class Model:
         # per-token per-layer gflops
         self.avg_context_len = int(self.args.target_isl + self.args.target_osl / 2)
         attn_core_gflops, other_gflops = get_attn_gflops(
-            self.config, self.avg_context_len, absorb=True
+            self.config, self.avg_context_len, self.args.tp_size, absorb=True
         )
-        moe_gflops = get_moe_gflops(self.config)
+        moe_gflops = get_moe_gflops(self.config, self.args.tp_size)
         print(
             "{:<40} {:<10.2f}".format(
                 "Per-token per-layer attn core (GFLOPs):", attn_core_gflops
@@ -130,7 +145,7 @@ class Model:
             "{:<40} {:<10}".format("Max prefill tokens:", self.args.max_prefill_tokens)
         )
         attn = create_attention(
-            self.config, self.args.use_fp8_gemm, self.args.use_fp8_kv
+            self.config, self.args.use_fp8_gemm, self.args.use_fp8_kv, self.args.tp_size
         )
         attn_core_time = attn.prefill_attn_core(
             self.args.target_isl, self.kvcache_bytes, self.args.device_type
@@ -140,7 +155,7 @@ class Model:
         )
         attn_core_time *= math.ceil(self.args.max_prefill_tokens / self.args.target_isl)
 
-        moe = MoE(self.config, self.args.use_fp8_gemm)
+        moe = MoE(self.config, self.args.use_fp8_gemm, self.args.tp_size)
         moe_time = moe.prefill_moe(
             self.args.max_prefill_tokens, self.args.device_type, self.args.world_size
         )
@@ -155,6 +170,13 @@ class Model:
         comm_time1, comm_time2 = comm.prefill_comm(self.args.max_prefill_tokens)
         print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_time1 * 1e6))
         print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_time2 * 1e6))
+
+        # TP all_reduce communication time
+        tp_comm_time = comm.tp_all_reduce(
+            self.args.max_prefill_tokens, self.args.tp_size
+        )
+        if self.args.tp_size > 1:
+            print("{:<40} {:<10.2f}".format("TP all_reduce (us):", tp_comm_time * 1e6))
 
         num_tokens = self.args.max_prefill_tokens
         if self.args.enable_tbo:
@@ -172,6 +194,7 @@ class Model:
             ttft += moe_time
             ttft += attn_other_time
             ttft += comm_time1 + comm_time2
+            ttft += tp_comm_time  # Add TP communication time
         ttft *= self.config.num_hidden_layers
         ttft *= 1000  # convert to ms
         ttft += 30  # for scheduler
@@ -179,14 +202,14 @@ class Model:
         print("{:<40} {:<10.2f}".format("TTFT (ms):", ttft))
         print(
             "{:<40} {:<10.0f}".format(
-                "Throughput (TGS:tok/GPU/s):", num_tokens / (ttft / 1000)
+                "Throughput (TGS:tok/GPU/s):", num_tokens / self.args.tp_size / (ttft / 1000)
             )
         )
 
     def decoding(self):
         print("{s:{c}^{n}}".format(s="Decoding", n=50, c="-"))
         attn = create_attention(
-            self.config, self.args.use_fp8_gemm, self.args.use_fp8_kv
+            self.config, self.args.use_fp8_gemm, self.args.use_fp8_kv, self.args.tp_size
         )
         attn_core_time = attn.decode_attn_core(
             self.target_bs,
@@ -196,7 +219,7 @@ class Model:
         )
         attn_other_time = attn.decode_attn_others(self.target_bs, self.args.device_type)
 
-        moe = MoE(self.config, self.args.use_fp8_gemm)
+        moe = MoE(self.config, self.args.use_fp8_gemm, self.args.tp_size)
         moe_time = moe.decode_moe(
             self.target_bs, self.args.device_type, self.args.world_size
         )
@@ -212,6 +235,11 @@ class Model:
         print("{:<40} {:<10.2f}".format("Comm before MoE/FFN (us):", comm_time1 * 1e6))
         print("{:<40} {:<10.2f}".format("Comm after MoE/FFN (us):", comm_time2 * 1e6))
 
+        # TP all_reduce communication time
+        tp_comm_time = comm.tp_all_reduce(self.target_bs, self.args.tp_size)
+        if self.args.tp_size > 1:
+            print("{:<40} {:<10.2f}".format("TP all_reduce (us):", tp_comm_time * 1e6))
+
         num_tokens = self.target_bs
         if self.args.enable_tbo:
             num_tokens *= 2
@@ -224,11 +252,12 @@ class Model:
             tpot += attn_other_time
             tpot += moe_time
             tpot += comm_time1 + comm_time2
+            tpot += tp_comm_time  # Add TP communication time
         tpot *= self.config.num_hidden_layers
         tpot *= 1000  # convert to ms
         tpot += 5  # for scheduler
 
         print("{:<40} {:<10.2f}".format("TPOT (ms):", tpot))
-        print("{:<40} {:<10.0f}".format("Throughput (TGS):", num_tokens / tpot * 1000))
+        print("{:<40} {:<10.0f}".format("Throughput (TGS:tok/GPU/s):", num_tokens / self.args.tp_size / (tpot / 1000)))
         if tpot > self.args.target_tpot:
             print("!Error: TPOT > SLO, need smaller GFLOPs to speedup")
