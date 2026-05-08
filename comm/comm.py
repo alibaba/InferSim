@@ -86,3 +86,22 @@ class Comm:
                 num_tokens, "low_latency"
             )
         return self.all_reduce(num_tokens), self.all_reduce(num_tokens)
+
+    def tp_all_reduce(self, num_tokens: int, tp_size: int):
+        """Calculate TP all_reduce communication time.
+
+        TP all_reduce happens after attention and MoE computation within each TP group.
+        For TP=N, each GPU holds 1/N of the output and needs to all_reduce to get full result.
+        """
+        if tp_size <= 1:
+            return 0
+        # TP all_reduce: each GPU sends/receives (tp_size - 1) / tp_size of data
+        # Using ring all_reduce: 2 * (tp_size - 1) / tp_size of data transferred
+        tensor_shape = [num_tokens, self.config.hidden_size]
+        size = 2  # fp16/bf16 output
+        for v in tensor_shape:
+            size *= v
+        # Ring all_reduce: 2 * (N-1)/N data transfer
+        transfer_size = size * 2 * (tp_size - 1) / tp_size
+        # Use NVLink bandwidth for intra-node TP communication
+        return transfer_size / (1024**3) / self.gpu.nvlink_bw

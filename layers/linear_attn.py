@@ -5,9 +5,12 @@ from mfu.mfu import (get_linear_attn_decode_latency,
 
 
 class GDN:
-    def __init__(self, config, use_fp8_gemm):
+    def __init__(self, config, use_fp8_gemm, tp_size):
         self.use_fp8_gemm = use_fp8_gemm
         self.config = config
+        # NOTE: linear-attn head counts are currently NOT sharded, so tp_size
+        # has no effect on GEMM shapes here. Stored for interface consistency.
+        self.tp_size = tp_size
 
     def decode_attn_core(self, bs, states_bytes, device_type):
         gpu = gpu_map[device_type]
@@ -32,6 +35,7 @@ class GDN:
         return max(t_attn_core / 1e6, t_states_load)
 
     def decode_attn_others(self, bs, device_type):
+        # hidden_size is NOT sharded; linear-attn heads currently not sharded
         key_dim = self.config.linear_num_key_heads * self.config.linear_key_head_dim
         value_dim = (
             self.config.linear_num_value_heads * self.config.linear_value_head_dim
@@ -87,5 +91,5 @@ class GDN:
         return self.decode_attn_others(seq_len, device_type)
 
 
-def create_linear_attn(config, use_fp8_gemm):
-    return GDN(config, use_fp8_gemm)
+def create_linear_attn(config, use_fp8_gemm, tp_size):
+    return GDN(config, use_fp8_gemm, tp_size)

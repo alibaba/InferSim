@@ -15,15 +15,18 @@ def get_gemm_mfu_and_latency(m, k, n, device_type, use_fp8_gemm):
 
 
 class MHA:
-    def __init__(self, config, use_fp8_gemm, use_fp8_kv):
+    def __init__(self, config, use_fp8_gemm, use_fp8_kv, tp_size):
         self.use_fp8_gemm = use_fp8_gemm
         self.use_fp8_kv = use_fp8_kv
         self.config = config
+        self.tp_size = tp_size
 
     def get_attn_core_gflops(self, bs, kv_len):
+        # TP shards attention heads
+        tp_num_heads = self.config.num_attention_heads // self.tp_size
         attn_core = (
             gemm_flops(
-                bs, self.config.num_attention_heads * self.config.head_dim, kv_len
+                bs, tp_num_heads * self.config.head_dim, kv_len
             )
             * 2
         )
@@ -33,7 +36,7 @@ class MHA:
         gpu = gpu_map[device_type]
         attn_core_gflops = self.get_attn_core_gflops(1, kv_len)
         attn_core_mfu = get_attn_decode_mfu(
-            self.config, bs, kv_len, device_type, self.use_fp8_kv
+            self.config, bs, kv_len, device_type, self.use_fp8_kv, self.tp_size
         )
         attn_core_time = (
             bs * attn_core_gflops / (gpu.fp16_tflops * 1024 * attn_core_mfu)
@@ -58,11 +61,13 @@ class MHA:
         return max(attn_core_time, kv_load_time)
 
     def decode_attn_others(self, bs, device_type):
+        # TP shards heads; hidden_size is NOT sharded
+        tp_num_heads = self.config.num_attention_heads // self.tp_size
+        tp_num_kv_heads = self.config.num_key_value_heads // self.tp_size
         qkv_proj = get_gemm_mfu_and_latency(
             m=bs,
             k=self.config.hidden_size,
-            n=(self.config.num_attention_heads + self.config.num_key_value_heads * 2)
-            * self.config.head_dim,
+            n=(tp_num_heads + tp_num_kv_heads * 2) * self.config.head_dim,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
         )
@@ -70,7 +75,7 @@ class MHA:
 
         o_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.head_dim,
+            k=tp_num_heads * self.config.head_dim,
             n=self.config.hidden_size,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -81,7 +86,7 @@ class MHA:
     def prefill_attn_core(self, seq_len, kvcache_bytes, device_type):
         gpu = gpu_map[device_type]
         attn_core_gflops = self.get_attn_core_gflops(1, seq_len)
-        attn_core_mfu = get_attn_prefill_mfu(self.config, seq_len, device_type)
+        attn_core_mfu = get_attn_prefill_mfu(self.config, seq_len, device_type, self.tp_size)
         attn_core_time = (
             seq_len * attn_core_gflops / 1.8 / (gpu.fp16_tflops * 1024 * attn_core_mfu)
         )
@@ -108,10 +113,11 @@ class MHA:
 
 
 class MLA(MHA):
-    def __init__(self, config, use_fp8_gemm, use_fp8_kv):
+    def __init__(self, config, use_fp8_gemm, use_fp8_kv, tp_size):
         self.use_fp8_gemm = use_fp8_gemm
         self.use_fp8_kv = use_fp8_kv
         self.config = config
+        self.tp_size = tp_size
 
     def get_attn_core_gflops_absorb(self, bs, kv_len):
         attn_core = gemm_flops(
@@ -139,7 +145,7 @@ class MLA(MHA):
         gpu = gpu_map[device_type]
         attn_core_gflops = self.get_attn_core_gflops_absorb(1, kv_len)
         attn_core_mfu = get_attn_decode_mfu(
-            self.config, bs, kv_len, device_type, self.use_fp8_kv
+            self.config, bs, kv_len, device_type, self.use_fp8_kv, self.tp_size
         )
         attn_core_time = (
             bs * attn_core_gflops / (gpu.fp16_tflops * 1024 * attn_core_mfu)
@@ -164,6 +170,8 @@ class MLA(MHA):
         return max(attn_core_time, kv_load_time)
 
     def decode_attn_others(self, bs, device_type):
+        # TP shards attention heads; hidden_size and lora ranks are NOT sharded
+        tp_num_heads = self.config.num_attention_heads // self.tp_size
         q_down_proj = get_gemm_mfu_and_latency(
             m=bs,
             k=self.config.hidden_size,
@@ -176,7 +184,7 @@ class MLA(MHA):
         q_up_proj = get_gemm_mfu_and_latency(
             m=bs,
             k=self.config.q_lora_rank,
-            n=self.config.num_attention_heads * self.config.qk_head_dim,
+            n=tp_num_heads * self.config.qk_head_dim,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
         )
@@ -195,7 +203,7 @@ class MLA(MHA):
 
         bmm_q_wk = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.qk_nope_head_dim,
+            k=tp_num_heads * self.config.qk_nope_head_dim,
             n=self.config.kv_lora_rank,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -204,7 +212,7 @@ class MLA(MHA):
 
         bmm_o_wv = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.kv_lora_rank,
+            k=tp_num_heads * self.config.kv_lora_rank,
             n=self.config.v_head_dim,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -213,7 +221,7 @@ class MLA(MHA):
 
         o_proj = get_gemm_mfu_and_latency(
             m=bs,
-            k=self.config.num_attention_heads * self.config.v_head_dim,
+            k=tp_num_heads * self.config.v_head_dim,
             n=self.config.hidden_size,
             device_type=device_type,
             use_fp8_gemm=self.use_fp8_gemm,
@@ -224,7 +232,7 @@ class MLA(MHA):
     def prefill_attn_core(self, seq_len, kvcache_bytes, device_type):
         gpu = gpu_map[device_type]
         attn_core_gflops = self.get_attn_core_gflops_noabsorb(1, seq_len)
-        attn_core_mfu = get_attn_prefill_mfu(self.config, seq_len, device_type)
+        attn_core_mfu = get_attn_prefill_mfu(self.config, seq_len, device_type, self.tp_size)
         attn_core_time = (
             seq_len * attn_core_gflops / 1.8 / (gpu.fp16_tflops * 1024 * attn_core_mfu)
         )
@@ -247,8 +255,8 @@ class MLA(MHA):
         return max(attn_core_time, kv_load_time)
 
 
-def create_attention(config, use_fp8_gemm, use_fp8_kv):
+def create_attention(config, use_fp8_gemm, use_fp8_kv, tp_size):
     if config.attn_type == "MHA/GQA":
-        return MHA(config, use_fp8_gemm, use_fp8_kv)
+        return MHA(config, use_fp8_gemm, use_fp8_kv, tp_size)
     elif config.attn_type == "MLA":
-        return MLA(config, use_fp8_gemm, use_fp8_kv)
+        return MLA(config, use_fp8_gemm, use_fp8_kv, tp_size)
