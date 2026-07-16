@@ -15,6 +15,8 @@ class ModelConfig:
 
         self.hidden_size = d["hidden_size"]
         self.num_hidden_layers = d["num_hidden_layers"]
+        self.model_type = d["model_type"]
+        self.is_deepseek_v4 = self.model_type == "deepseek_v4"
 
         self.is_hybrid_linear = d.get("full_attention_interval") is not None
         if self.is_hybrid_linear:
@@ -31,7 +33,9 @@ class ModelConfig:
             self.linear_num_value_heads = d["linear_num_value_heads"]
 
         self.attn_type = "MHA/GQA"
-        if "kv_lora_rank" in d:
+        if self.is_deepseek_v4:
+            self.attn_type = "DSV4_MQA"
+        elif "kv_lora_rank" in d:
             self.attn_type = "MLA"
 
         # attn
@@ -51,11 +55,37 @@ class ModelConfig:
             self.v_head_dim = d["v_head_dim"]
             self.index_topk = d.get("index_topk")
             self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim
+        elif self.attn_type == "DSV4_MQA":
+            # DeepSeek-V4 uses MQA with a distinct Q/O LoRA path and a
+            # per-layer compressed KV cache.  Keep these fields separate from
+            # MLA so benchmark planning cannot silently reuse MLA data.
+            self.num_attention_heads = d["num_attention_heads"]
+            self.num_key_value_heads = d["num_key_value_heads"]
+            self.head_dim = d["head_dim"]
+            self.q_lora_rank = d["q_lora_rank"]
+            self.o_lora_rank = d["o_lora_rank"]
+            self.qk_rope_head_dim = d["qk_rope_head_dim"]
+            self.qk_nope_head_dim = self.head_dim - self.qk_rope_head_dim
+            self.num_output_groups = d["o_groups"]
+            self.index_topk = d.get("index_topk")
+            self.sliding_window = d.get("sliding_window")
+            all_compress_ratios = d["compress_ratios"]
+            if len(all_compress_ratios) < self.num_hidden_layers:
+                raise ValueError(
+                    "DeepSeek-V4 compress_ratios must cover every hidden layer"
+                )
+            # Some checkpoints append one entry for the MTP module. The main
+            # simulator models decoder layers only, so do not count it in the
+            # base-model KV cache or per-layer latency.
+            self.compress_ratios = all_compress_ratios[: self.num_hidden_layers]
+            self.nextn_compress_ratios = all_compress_ratios[self.num_hidden_layers :]
 
         # FFN/MoE
         self.is_moe = True
         if "num_routed_experts" in d:
             self.num_routed_experts = d["num_routed_experts"]
+        elif "n_routed_experts" in d:
+            self.num_routed_experts = d["n_routed_experts"]
         elif "num_experts" in d:
             self.num_routed_experts = d["num_experts"]
         else:
@@ -65,7 +95,9 @@ class ModelConfig:
         if self.is_moe:
             self.num_experts_per_tok = d["num_experts_per_tok"]
             self.intermediate_size = d["moe_intermediate_size"]
-            self.num_shared_experts = d.get("num_shared_experts", 0)
+            self.num_shared_experts = d.get(
+                "num_shared_experts", d.get("n_shared_experts", 0)
+            )
         else:
             self.num_experts_per_tok = 1
             self.intermediate_size = d["intermediate_size"]

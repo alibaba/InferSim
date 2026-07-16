@@ -8,6 +8,13 @@ from models.model import Model
 def main(args):
     config = ModelConfig(args.config_path)
 
+    if config.is_deepseek_v4:
+        raise NotImplementedError(
+            "DeepSeek-V4 simulation needs measured dsv4_compressed_mqa benchmark data. "
+            "Generate its benchmark manifest with "
+            "kernel_benchmark/deepseek_v4_plan.py first."
+        )
+
     print("\n{s:{c}^{n}}".format(s=" Simulator Result ", n=50, c="="))
     print("{:<40} {:<10}".format("Device type:", args.device_type))
     print("{:<40} {:<10}".format("World size:", args.world_size))

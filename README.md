@@ -114,6 +114,19 @@ TPOT (ms):                               38.00
 Throughput (TGS):                        2632
 ```
 
+## DeepSeek-V4 Pro benchmark planning
+
+DeepSeek-V4 Pro uses MQA with per-layer compressed KV caches, rather than the
+MLA path used by DeepSeek-V3. Generate a hardware-independent benchmark
+manifest before collecting measurements:
+
+    $ python3 kernel_benchmark/deepseek_v4_plan.py \
+        --config-path /path/to/DeepSeek-V4-Pro/config.json
+
+The manifest lists the V4-specific dense GEMM, MoE grouped-GEMM and compressed
+MQA cases. It does not reuse MLA benchmark data. The generated cases must be
+measured on the target GPU before they can be used for a performance simulation.
+
 ## Acknowledgement
 
 This work is developed and maintained by Alimama AI Infra Team & Future Living Lab, Alibaba Group.
