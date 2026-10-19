@@ -135,11 +135,12 @@ class MHA:
 
 
 class MLA(MHA):
-    def __init__(self, config, use_fp8_gemm, use_fp8_kv, tp_size):
+    def __init__(self, config, use_fp8_gemm, use_fp8_kv, tp_size, prefill_mfu=None):
         self.use_fp8_gemm = use_fp8_gemm
         self.use_fp8_kv = use_fp8_kv
         self.config = config
         self.tp_size = tp_size
+        self.prefill_mfu = prefill_mfu
 
     def get_attn_core_gflops_absorb(self, bs, kv_len):
         attn_core = gemm_flops(
@@ -262,7 +263,12 @@ class MLA(MHA):
     def prefill_attn_core(self, seq_len, kvcache_bytes, device_type):
         gpu = gpu_map[device_type]
         attn_core_gflops = self.get_attn_core_gflops_noabsorb(1, seq_len)
-        attn_core_mfu = get_attn_prefill_mfu(self.config, seq_len, device_type, self.tp_size)
+        if self.prefill_mfu is None:
+            attn_core_mfu = get_attn_prefill_mfu(
+                self.config, seq_len, device_type, self.tp_size
+            )
+        else:
+            attn_core_mfu = self.prefill_mfu
         attn_core_time = (
             seq_len
             * attn_core_gflops
@@ -294,4 +300,4 @@ def create_attention(
     if config.attn_type == "MHA/GQA":
         return MHA(config, use_fp8_gemm, use_fp8_kv, tp_size, prefill_mfu)
     elif config.attn_type == "MLA":
-        return MLA(config, use_fp8_gemm, use_fp8_kv, tp_size)
+        return MLA(config, use_fp8_gemm, use_fp8_kv, tp_size, prefill_mfu)
